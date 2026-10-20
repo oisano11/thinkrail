@@ -382,6 +382,7 @@ export const SettingsSection = {
 	Layout: "layout",
 	Updates: "updates",
 	Terminal: "terminal",
+	Language: "language",
 	Workspaces: "workspaces",
 	Templates: "templates",
 	Review: "review",
