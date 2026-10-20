@@ -7,6 +7,7 @@ import {
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
+import { t } from "@/i18n";
 import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
@@ -31,6 +32,7 @@ import {
 	type LayoutGroupLocation,
 	layoutTabName,
 	moveTabToGroup,
+	regionLabel,
 	toolTab,
 } from "./model";
 import { tabIcon } from "./tabIcon";
@@ -77,10 +79,12 @@ export function AuxiliaryRailButton({
 		entry.kind === "tool"
 			? layoutTabName(toolTab(entry.tool))
 			: entry.kind === "terminals"
-				? `Terminal group ${ordinal}, ${entry.tabs.length} ${entry.tabs.length === 1 ? "session" : "sessions"}`
+				? entry.tabs.length === 1
+					? t("Terminal group {0}, 1 session", ordinal)
+					: t("Terminal group {0}, {1} sessions", ordinal, entry.tabs.length)
 				: entry.region === "bottom"
-					? "Terminal"
-					: `Empty ${entry.region} group ${ordinal}`;
+					? t("Terminal")
+					: t("Empty {0} group {1}", t(regionLabel(entry.region)), ordinal);
 	return (
 		<div data-active={active} className={railEntryFrameClass(entry.region)}>
 			{active ? <AuxiliaryRailIndicator region={entry.region} /> : null}
@@ -90,7 +94,7 @@ export function AuxiliaryRailButton({
 						<span>
 							{name}
 							<br />
-							{entry.tabs.map((tab) => layoutTabName(tab)).join(", ")}
+							{entry.tabs.map((tab) => layoutTabName(tab)).join(t(", "))}
 						</span>
 					) : (
 						name
@@ -118,7 +122,9 @@ export function AuxiliaryRailButton({
 					}
 					{...control}
 					onClick={onActivate}
-					data-drop-label={dropEnabled ? `Join ${entry.region} group ${ordinal}` : undefined}
+					data-drop-label={
+						dropEnabled ? t("Join {0} group {1}", t(regionLabel(entry.region)), ordinal) : undefined
+					}
 					data-drop-active={isOver || undefined}
 					data-drop-hint={(dropEnabled && !isOver) || undefined}
 					className={cn(
@@ -210,7 +216,7 @@ export function AuxiliaryRegionRail({
 			<DropZone
 				id={tupleKey("dnd-rail-boundary", region, String(paneIndex))}
 				target={{ kind: "auxiliary-edge", region, index: paneIndex }}
-				label={`New ${region} pane here`}
+				label={t("New {0} pane here", region)}
 				className={cn(
 					"absolute",
 					region === "bottom"
@@ -231,7 +237,7 @@ export function AuxiliaryRegionRail({
 						<DropZone
 							id={tupleKey("dnd-hidden-side-edge", region)}
 							target={{ kind: "auxiliary-edge", region, index: groups.length }}
-							label={`Create ${region} group in hidden side`}
+							label={t("Create {0} group in hidden side", region)}
 							className="relative min-h-32 w-32 flex-1"
 						/>
 					) : (

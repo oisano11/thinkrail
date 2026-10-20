@@ -1,12 +1,13 @@
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
+import { t } from "@/i18n";
 import {
 	type AuxiliaryRailEntry,
 	type AuxiliaryRailToolEntry,
 	clusterAuxiliaryRail,
 } from "./auxiliaryPresentation";
-import { layoutTabName, toolTab } from "./model";
+import { layoutTabName, regionLabel, toolTab } from "./model";
 import { tabIcon } from "./tabIcon";
 import type { LayoutAuxiliaryRegion } from "./types";
 
@@ -117,7 +118,7 @@ export function AuxiliaryRail({
 		<div
 			ref={root}
 			role="toolbar"
-			aria-label={`${region[0]?.toUpperCase()}${region.slice(1)} tools`}
+			aria-label={t("{0} tools", t(regionLabel(region)))}
 			aria-orientation={horizontal ? "horizontal" : "vertical"}
 			data-testid={region === "bottom" ? "bottom-tool-rail" : `${region}-layout-rail`}
 			className={cn(

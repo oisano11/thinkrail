@@ -129,7 +129,7 @@ test("preparation is a separate indeterminate native phase", () => {
 	expect(markup.toLowerCase()).not.toContain("verification");
 });
 
-test("ready native update exposes Install & Restart and closing Settings as deferral", () => {
+test("ready native update exposes Install &amp; Restart and closing Settings as deferral", () => {
 	const markup = render(
 		nativeUpdates(nativeState("ready", { availableVersion: "0.1.0-nightly.46" })),
 	);

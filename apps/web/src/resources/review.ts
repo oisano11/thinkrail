@@ -1,4 +1,5 @@
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import type { ResourceIntent, ResourceRenderer } from "./types";
 
 export function anchorLabel(
@@ -9,12 +10,12 @@ export function anchorLabel(
 	if (structural?.kind === "structural") {
 		if (structural.scheme === "table-cell") {
 			const cell = /^(\d+):(\d+)$/.exec(structural.ref);
-			if (cell) return `R${cell[1]}C${cell[2]}`;
+			if (cell) return t("R{0}C{1}", cell[1], cell[2]);
 		}
 		if (structural.scheme === "json-pointer") return structural.ref;
 		if (structural.scheme === "ipynb-cell") {
 			const index = /^index:(\d+)$/.exec(structural.ref);
-			if (index) return `cell ${Number(index[1]) + 1}`;
+			if (index) return t("cell {0}", Number(index[1]) + 1);
 			const ordinal = ipynbCellOrdinals?.get(structural.ref);
 			return `cell ${ordinal ?? structural.ref}`;
 		}
@@ -28,7 +29,7 @@ export function anchorLabel(
 	}
 	const region = anchor.selectors.find((selector) => selector.kind === "region");
 	if (region?.kind === "region") {
-		return region.page === undefined ? "region" : `p${region.page} region`;
+		return region.page === undefined ? t("region") : t("p{0} region", region.page);
 	}
 	return "file";
 }

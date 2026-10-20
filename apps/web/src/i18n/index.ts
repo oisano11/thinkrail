@@ -5,6 +5,7 @@
  * data-only view for scripts.
  */
 
+export { translateHostMessage } from "./hostMessages";
 export {
 	applyLocale,
 	DEFAULT_LOCALE,

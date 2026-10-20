@@ -8,9 +8,9 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
-
 import { Markdown } from "../../Markdown";
 import { runCounters } from "./runDetails";
 
@@ -67,11 +67,11 @@ export function SubagentCompletionCard({
 						type="button"
 						data-testid="subagent-completion-transcript"
 						onClick={() => actions.openSubagentTranscript(details.childSessionId)}
-						title="Open transcript"
+						title={t("Open transcript")}
 						className="ml-auto flex shrink-0 items-center gap-4 text-primary hover:underline"
 					>
 						<ScrollText className="size-12 shrink-0" />
-						Transcript
+						{t("Transcript")}
 					</button>
 				) : null}
 			</div>
@@ -90,7 +90,7 @@ export function SubagentCompletionCard({
 						) : (
 							<ChevronRight className="size-16 shrink-0" />
 						)}
-						Report
+						{t("Report")}
 					</button>
 					{reportOpen ? (
 						<div data-testid="subagent-completion-report">

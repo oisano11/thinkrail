@@ -1,4 +1,5 @@
 import { parseToolResultContent, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { t } from "@/i18n";
 import { ToolResultImages } from "./ToolResultImages";
 import { getToolRenderer } from "./toolRegistry";
 
@@ -11,7 +12,10 @@ export function ToolRendererBody({
 	return (
 		<>
 			<Renderer {...props} />
-			<ToolResultImages images={images} label={imageLabel || `${props.toolName} image output`} />
+			<ToolResultImages
+				images={images}
+				label={imageLabel || t("{0} image output", props.toolName)}
+			/>
 		</>
 	);
 }

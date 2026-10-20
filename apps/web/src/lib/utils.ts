@@ -1,4 +1,5 @@
 import type { UserMessage } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -268,12 +269,12 @@ export function platformShortcutLabel(
 
 export function relativeTime(ms: number, now: number): string {
 	const s = Math.floor((now - ms) / 1000);
-	if (s < 60) return "just now";
+	if (s < 60) return t("just now");
 	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
+	if (m < 60) return t("{0}m ago", m);
 	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
+	if (h < 24) return t("{0}h ago", h);
+	return t("{0}d ago", Math.floor(h / 24));
 }
 
 /** Compact elapsed label for dense rows: `3h`, `12d`, `3w`, `4mo`. */

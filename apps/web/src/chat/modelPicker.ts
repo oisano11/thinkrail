@@ -1,4 +1,5 @@
 import type { ProviderAuthKind, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 
 export function formatContext(tokens: number): string {
 	if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`.replace(".0", "");
@@ -32,7 +33,7 @@ export const CENTRAL_KIND_TAG = "JCP";
 export function costLabel(model: WireModel): string | null {
 	if (!model.cost) return null;
 	if (model.auth && !billsPerToken(model.auth.kind)) return null;
-	return `${formatPrice(model.cost.input)} / ${formatPrice(model.cost.output)}`;
+	return t("{0} / {1}", formatPrice(model.cost.input), formatPrice(model.cost.output));
 }
 
 /** The short word that sits beside the connection glyph in a row: what this model draws on. */
@@ -41,13 +42,13 @@ export function kindLabel(model: WireModel): string | null {
 	if (!auth) return null;
 	switch (auth.kind) {
 		case "oauth":
-			return auth.detail ?? "plan";
+			return auth.detail ?? t("plan");
 		case "central":
-			return "quota";
+			return t("quota");
 		case "env":
-			return auth.detail ?? "env";
+			return auth.detail ?? t("env");
 		case "api-key":
-			return auth.detail ?? "API key";
+			return auth.detail ?? t("API key");
 		default:
 			return null;
 	}
@@ -56,10 +57,11 @@ export function kindLabel(model: WireModel): string | null {
 /** The full sentence for tooltips and group headings: kind word plus pi's detail. */
 export function describeAuth(model: WireModel): string | null {
 	if (!model.auth) return null;
-	const label = AUTH_KIND_LABEL[model.auth.kind];
-	return model.auth.detail ? `${label} · ${model.auth.detail}` : label;
+	const label = t(AUTH_KIND_LABEL[model.auth.kind]);
+	return model.auth.detail ? t("{0} · {1}", label, model.auth.detail) : label;
 }
 
+/** Kept in English so the map stays language-independent; the read site translates it. */
 export const LEVEL_HINT: Record<ThinkingLevel, string> = {
 	off: "No reasoning — fastest, cheapest",
 	minimal: "Briefest reasoning",

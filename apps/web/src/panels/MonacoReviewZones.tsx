@@ -1,5 +1,6 @@
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
+import { t } from "@/i18n";
 import type { SurfaceReview } from "@/resources";
 import { ReviewComposer } from "./ReviewComposer";
 import { ReviewThreadCard } from "./ReviewThreadCard";
@@ -44,8 +45,8 @@ export function MonacoReviewZones({
 							}}
 							label={
 								composer.selection.startLine === composer.selection.endLine
-									? `Line ${composer.selection.startLine}`
-									: `Lines ${composer.selection.startLine}–${composer.selection.endLine}`
+									? t("Line {0}", composer.selection.startLine)
+									: t("Lines {0}–{1}", composer.selection.startLine, composer.selection.endLine)
 							}
 							commenting={review.commenting}
 							onClose={onCloseComposer}

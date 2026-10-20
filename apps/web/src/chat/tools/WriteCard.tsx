@@ -5,6 +5,7 @@ import {
 	strArg,
 	type ToolRenderProps,
 } from "@thinkrail/extension-api/web";
+import { t } from "@/i18n";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
@@ -42,7 +43,7 @@ export function WriteCard({
 					<CodeBlock code={content} lang={lang} />
 				</Collapsible>
 			) : (
-				<span className="text-text-muted tr-text-metadata italic">(empty file)</span>
+				<span className="text-text-muted tr-text-metadata italic">{t("(empty file)")}</span>
 			)}
 		</div>
 	);

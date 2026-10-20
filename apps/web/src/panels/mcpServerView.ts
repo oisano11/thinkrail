@@ -5,6 +5,7 @@ import type {
 	McpServerSummary,
 	WsParams,
 } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import { MCP_STATE_LABEL, type McpStateTone, mcpStateTone, mcpToolCountLabel } from "@/lib";
 import type { McpServerRow } from "@/store";
 import { type McpEditableExposure, withEnabled, withExposure } from "./mcpEntries";
@@ -76,10 +77,6 @@ export function formatStartingElapsed(ms: number): string {
 	return minutes < 1 ? "<1 min" : `${minutes} min`;
 }
 
-function inChats(row: McpServerRow, count: number): string {
-	return row.sessions.total > 1 ? ` in ${count} of ${row.sessions.total} chats` : "";
-}
-
 export function mcpRowView(row: McpServerRow, now: number): McpRowView {
 	const { summary } = row;
 	const view = baseView(row, now);
@@ -92,8 +89,8 @@ export function mcpRowView(row: McpServerRow, now: number): McpRowView {
 			...view,
 			reason:
 				summary.approval?.state === "changed"
-					? "The repository's override changed since you approved it — review it again."
-					: "The repository overrides this server's settings — review the change.",
+					? t("The repository's override changed since you approved it. Review it again.")
+					: t("The repository overrides this server's settings. Review the change."),
 			action: "review",
 		};
 	}
@@ -106,76 +103,83 @@ function baseView(row: McpServerRow, now: number): McpRowView {
 	switch (row.state) {
 		case "replaced":
 			return {
-				label: "Replaced by project",
+				label: t("Replaced by project"),
 				tone: "neutral",
-				reason: "This project's own entry runs instead.",
+				reason: t("This project's own entry runs instead."),
 			};
 		case "handled-elsewhere":
-			return { label: MCP_STATE_LABEL["handled-elsewhere"], tone: "neutral" };
+			return { label: t(MCP_STATE_LABEL["handled-elsewhere"]), tone: "neutral" };
 		case "starting":
 			return {
-				label: `Starting · ${formatStartingElapsed(now - (row.startingSince ?? now))}`,
+				label: t("Starting · {0}", formatStartingElapsed(now - (row.startingSince ?? now))),
 				tone: "working",
 				...(row.sessions.total > 1
-					? { reason: `Starting${inChats(row, row.sessions.reporting.length)}.` }
+					? { reason: t("Starting in {0} chats.", row.sessions.reporting.length) }
 					: {}),
 			};
 		case "connected": {
 			const tools = row.toolCount === undefined ? "" : ` · ${mcpToolCountLabel(row.toolCount)}`;
+			const label =
+				row.sessions.total > 1
+					? t("Connected in {0} of {1} chats{2}", row.sessions.connected, row.sessions.total, tools)
+					: t("Connected{0}", tools);
 			return {
-				label: `Connected${inChats(row, row.sessions.connected)}${tools}`,
+				label,
 				tone: mcpStateTone("connected", row.toolCount),
-				...(row.toolCount === 0 ? { reason: "The server reports no tools." } : {}),
+				...(row.toolCount === 0 ? { reason: t("The server reports no tools.") } : {}),
 			};
 		}
 		case "needs-sign-in":
 			return {
-				label: MCP_STATE_LABEL["needs-sign-in"],
+				label: t(MCP_STATE_LABEL["needs-sign-in"]),
 				tone: "warning",
-				reason: "Sign in to let chats use this server.",
+				reason: t("Sign in to let chats use this server."),
 				...(row.effective && summary.oauth ? { action: "sign-in" as const } : {}),
 			};
 		case "failed":
 			return {
-				label: MCP_STATE_LABEL.failed,
+				label: t(MCP_STATE_LABEL.failed),
 				tone: "error",
-				reason: mcpDetailReason(row.detail, summary.name) ?? "The server failed to start.",
+				reason: mcpDetailReason(row.detail, summary.name) ?? t("The server failed to start."),
 				action: "reconnect",
 				secondary: "show-log",
 			};
 		case "disconnected":
 			return {
-				label: MCP_STATE_LABEL.disconnected,
+				label: t(MCP_STATE_LABEL.disconnected),
 				tone: "warning",
-				reason: "Reconnects on the next call.",
+				reason: t("Reconnects on the next call."),
 				action: "reconnect",
 			};
 		case "disabled":
-			return { label: MCP_STATE_LABEL.disabled, tone: "neutral", reason: "Turned off." };
+			return { label: t(MCP_STATE_LABEL.disabled), tone: "neutral", reason: t("Turned off.") };
 		case "disabled-in-project":
 			return {
-				label: MCP_STATE_LABEL["disabled-in-project"],
+				label: t(MCP_STATE_LABEL["disabled-in-project"]),
 				tone: "neutral",
-				reason: "Turned off for this project only.",
+				reason: t("Turned off for this project only."),
 			};
 		case "disabled-in-chat":
 			return {
-				label: `Disabled in ${row.sessions.total > 1 ? `${row.sessions.reporting.length} of ${row.sessions.total} chats` : "1 chat"}`,
+				label:
+					row.sessions.total > 1
+						? t("Disabled in {0} of {1} chats", row.sessions.reporting.length, row.sessions.total)
+						: t("Disabled in this chat"),
 				tone: "neutral",
-				reason: "Turned off from a chat's Resources.",
+				reason: t("Turned off from a chat's Resources."),
 			};
 		case "pending-approval":
 			return summary.approval?.state === "changed"
 				? {
-						label: "Changed since approval",
+						label: t("Changed since approval"),
 						tone: "warning",
-						reason: "The entry changed since you approved it — review it again.",
+						reason: t("The entry changed since you approved it — review it again."),
 						action: "review",
 					}
 				: {
 						label: MCP_STATE_LABEL["pending-approval"],
 						tone: "warning",
-						reason: "Defined by this repository — review what it runs before it starts.",
+						reason: t("Defined by this repository — review what it runs before it starts."),
 						action: "review",
 					};
 		case "invalid-config":
@@ -189,14 +193,14 @@ function baseView(row: McpServerRow, now: number): McpRowView {
 			return {
 				label: MCP_STATE_LABEL["pending-reload"],
 				tone: "info",
-				reason: "Applies when the chat is idle.",
+				reason: t("Applies when the chat is idle."),
 				action: "reload",
 			};
 		case "not-running":
 			return {
 				label: MCP_STATE_LABEL["not-running"],
 				tone: "neutral",
-				reason: "Starts when a chat opens in this workspace.",
+				reason: t("Starts when a chat opens in this workspace."),
 				action: "open-chat",
 				...(row.effective && http ? { secondary: "test-connection" as const } : {}),
 			};
@@ -205,8 +209,8 @@ function baseView(row: McpServerRow, now: number): McpRowView {
 				label: MCP_STATE_LABEL.unknown,
 				tone: "neutral",
 				reason: row.startingStalled
-					? "Still starting after a minute — pi has not answered."
-					: "pi has not reported this server yet.",
+					? t("Still starting after a minute — pi has not answered.")
+					: t("pi has not reported this server yet."),
 			};
 	}
 }

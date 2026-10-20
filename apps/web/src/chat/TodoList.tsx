@@ -18,6 +18,7 @@ import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/c
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
+import { t } from "@/i18n";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
 import {
 	groupProgress,
@@ -31,6 +32,8 @@ import {
 
 export type ChangeTarget = { sha: string } | { path: string };
 
+// Labels rather than copy: every read runs through `t`, so the module-level map can stay
+// language-independent.
 const STATUS_LABEL: Record<TodoStatus, string> = {
 	in_progress: "Working on this",
 	pending: "Up next",
@@ -45,16 +48,16 @@ export function glanceIcon(glance: PlanGlance): {
 	if (glance === "waiting_question")
 		return {
 			Icon: MessageCircleQuestion,
-			label: "Needs your answer",
+			label: t("Needs your answer"),
 			className: "text-primary",
 		};
 	if (glance === "waiting")
-		return { Icon: CirclePause, label: "Paused", className: "text-text-muted" };
-	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
+		return { Icon: CirclePause, label: t("Paused"), className: "text-text-muted" };
+	return { Icon: CircleDot, label: t(STATUS_LABEL.in_progress), className: "text-primary" };
 }
 
 function statusLabel(status: TodoStatus, glance: PlanGlance): string {
-	return status === "in_progress" ? glanceIcon(glance).label : STATUS_LABEL[status];
+	return status === "in_progress" ? glanceIcon(glance).label : t(STATUS_LABEL[status]);
 }
 
 export function StatusIcon({
@@ -116,16 +119,16 @@ export function TodoAddRow({
 				onKeyDown={(e) => {
 					if (e.key === "Enter") void submit();
 				}}
-				placeholder="Queue a task for the agent"
+				placeholder={t("Queue a task for the agent")}
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
-				<IconTooltip label="Open the plan as a page — review each step's changes">
+				<IconTooltip label={t("Open the plan as a page — review each step's changes")}>
 					<button
 						type="button"
 						data-testid="todo-open-plan"
 						onClick={onOpenPlan}
-						aria-label="Open the plan page"
+						aria-label={t("Open the plan page")}
 						className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 					>
 						<FileText className="size-14" />
@@ -177,7 +180,7 @@ function GroupBlock({
 					data-testid="todo-group-progress"
 					className="shrink-0 tr-text-eyebrow text-text-muted"
 				>
-					{empty ? "planning\u2026" : `${done}/${total}`}
+					{empty ? t("planning…") : `${done}/${total}`}
 				</span>
 			</div>
 			{empty ? (
@@ -186,7 +189,7 @@ function GroupBlock({
 					className="ml-12 flex items-center gap-8 border-border-default border-l pl-8 py-4 tr-text-metadata text-text-subtle"
 				>
 					<LoaderCircle className="size-12 shrink-0 animate-spin text-primary" />
-					The plan for this task is forming
+					{t("The plan for this task is forming")}
 				</p>
 			) : null}
 			<ul className="ml-12 flex flex-col border-border-default border-l pl-8">
@@ -252,12 +255,12 @@ export function TodoRows({
 				<GroupBlock key={group.id} group={group} {...rowProps} />
 			))}
 			<LooseList items={s.activeLoose} {...rowProps} />
-			{hasTodo ? <SectionLabel label="Up next" /> : null}
+			{hasTodo ? <SectionLabel label={t("Up next")} /> : null}
 			{s.pendingGroups.map((group) => (
 				<GroupBlock key={group.id} group={group} {...rowProps} />
 			))}
 			<LooseList items={s.pendingLoose} {...rowProps} />
-			{hasDone ? <SectionLabel label="Done" /> : null}
+			{hasDone ? <SectionLabel label={t("Done")} /> : null}
 			{s.doneGroups.map((group) => (
 				<DoneGroup key={group.id} group={group} {...rowProps} />
 			))}
@@ -290,8 +293,7 @@ function DoneGroup({
 				<Check className="size-12 shrink-0 text-primary" />
 				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted">{group.title}</span>
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">
-					{group.todos.length}
-					{group.todos.length === 1 ? " step" : " steps"}
+					{group.todos.length === 1 ? t("1 step") : t("{0} steps", group.todos.length)}
 				</span>
 			</button>
 			{expanded ? (
@@ -328,12 +330,12 @@ function ChangeSetChip({
 				onClick={open}
 				title={
 					set.kind === "commit"
-						? `Review this step's changes (commit ${set.sha.slice(0, 7)})`
-						: "Review this step's changed files"
+						? t("Review this step's changes (commit {0})", set.sha.slice(0, 7))
+						: t("Review this step's changed files")
 				}
 				className="tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
 			>
-				{count} {count === 1 ? "file" : "files"}
+				{count === 1 ? t("1 file") : t("{0} files", count)}
 			</button>
 			{expanded && set.kind === "paths" ? (
 				<ul className="mt-4 flex flex-col gap-4">
@@ -384,11 +386,11 @@ function TodoRow({
 				className="shrink-0"
 				title={
 					reviewing
-						? "Checking…"
+						? t("Checking…")
 						: changesRequested && todo.status === "done"
-							? "Needs a fix"
+							? t("Needs a fix")
 							: reviewed
-								? "Checked"
+								? t("Checked")
 								: statusLabel(todo.status, glance)
 				}
 			>
@@ -416,18 +418,18 @@ function TodoRow({
 			{todo.origin === "user" ? (
 				<span
 					data-testid="todo-origin-user"
-					title="Added by you — the agent won't drop it"
+					title={t("Added by you — the agent won't drop it")}
 					className="shrink-0 text-text-muted"
 				>
 					<UserRound className="size-14" />
 				</span>
 			) : null}
 			{onRemove && todo.status !== "done" && !reviewing ? (
-				<IconTooltip label="Remove from the queue">
+				<IconTooltip label={t("Remove from the queue")}>
 					<button
 						type="button"
 						data-testid="todo-remove"
-						aria-label="Remove from the queue"
+						aria-label={t("Remove from the queue")}
 						onClick={() => {
 							void onRemove(todo.id);
 						}}

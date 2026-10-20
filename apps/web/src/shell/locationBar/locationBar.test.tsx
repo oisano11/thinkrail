@@ -73,8 +73,8 @@ test("a worktree renders project, workspace and branch · from base segments", (
 	expect(ids).not.toContain("scope-review-segment");
 	expect(html).toContain(">Image selection coordinates bug<");
 	expect(html).toContain(">fix-image-region-comment-coords<");
-	expect(html).toContain(">origin/main<");
-	const caption = /Branch<span[^>]*>· from <span data-testid="scope-base">origin\/main<\/span>/;
+	expect(html).toContain("· from origin/main");
+	const caption = /Branch<span[^>]*><span data-testid="scope-base">· from origin\/main<\/span>/;
 	expect(html).toMatch(caption);
 });
 

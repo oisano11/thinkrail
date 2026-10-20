@@ -54,6 +54,7 @@ import {
 	sameModel,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
+import { t } from "@/i18n";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
 import type { ChatMessageOrder } from "../chat/chatPreferences";
@@ -762,7 +763,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						text: failure,
 						recovery: "try-again",
 					}
-				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
+				: { kind: "system", id: crypto.randomUUID(), text: t("✓ Done"), endedAt: Date.now() };
 			return {
 				...rt,
 				turns: [
@@ -2062,7 +2063,7 @@ function nextTerminalTitle(list: TerminalTab[]): string {
 	const used = list
 		.map((tab) => Number.parseInt(/^Terminal (\d+)$/.exec(tab.title)?.[1] ?? "", 10))
 		.filter((n) => Number.isInteger(n));
-	return `Terminal ${Math.max(0, ...used) + 1}`;
+	return t("Terminal {0}", Math.max(0, ...used) + 1);
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -2453,7 +2454,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (wasActive) {
 			if (fallbackWorkspace) set((state) => workspaceActivationPatch(state, fallbackWorkspace));
 			else s.selectProject(projectId);
-			toast.info(`Workspace "${name ?? "?"}" was removed`);
+			toast.info(t('Workspace "{0}" was removed', name ?? "?"));
 		}
 	},
 	selectProject: (selectedProjectId, opts) =>

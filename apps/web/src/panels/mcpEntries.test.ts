@@ -124,7 +124,7 @@ test("literal values are found in env, headers, oauth secrets and URL credential
 	expect(mcpUrlCredentials(remote)).toEqual(["user info", 'query "token"']);
 	expect(mcpSecretIssues(remote)).toEqual([
 		`header Authorization and oauth clientSecret are not references. ${HINT}`,
-		`The URL carries a credential (user info, query "token"). pi sends the URL as written — pass the secret in a header instead, such as Authorization: Bearer \${TOKEN}.`,
+		`The URL carries a credential (user info, query "token"). pi sends the URL as written. Pass the secret in a header instead, such as Authorization: Bearer \${TOKEN}.`,
 	]);
 	expect(mcpSecretIssues({ command: "x", env: { A: `\${A}`, B: "!op read b" } })).toEqual([]);
 });
@@ -316,7 +316,7 @@ test("the form saves references only: a plain or empty value, or a credential in
 			[],
 		).url,
 	).toBe(
-		`The URL carries a credential (user info, query "api_key"). pi sends the URL as written — pass the secret in a header instead, such as Authorization: Bearer \${TOKEN}.`,
+		`The URL carries a credential (user info, query "api_key"). pi sends the URL as written. Pass the secret in a header instead, such as Authorization: Bearer \${TOKEN}.`,
 	);
 });
 
@@ -376,7 +376,7 @@ test("import issues add name rules for the chosen scope and the project-file aut
 	]);
 	expect(
 		importIssues({ name: "a-b", entry: { command: "x" }, errors: [] }, "user", [], ["a-b", "a_b"]),
-	).toEqual(['Clashes with "a_b" — names that differ only in - and _ share tools.']);
+	).toEqual(['Clashes with "a_b": names that differ only in - and _ share tools.']);
 	expect(
 		importIssues(
 			{

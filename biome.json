@@ -13,7 +13,8 @@
 			"!**/.claude",
 			"!apps/web/src/styles/generated",
 			"!apps/web/src/chat/generated",
-			"!apps/web/src/i18n/keys.ts"
+			"!apps/web/src/i18n/keys.ts",
+			"!apps/web/src/i18n/hostMessages.generated.ts"
 		]
 	},
 	"formatter": {

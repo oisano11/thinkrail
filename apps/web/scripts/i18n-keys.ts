@@ -13,6 +13,7 @@ import { join } from "node:path";
  *   bun scripts/i18n-keys.ts            # report drift only, exit 1 when stale
  */
 import * as ts from "typescript";
+import { HOST_MESSAGES } from "../src/i18n/hostMessages.generated";
 
 const rootArg = process.argv.indexOf("--root");
 const root = rootArg >= 0 ? (process.argv[rootArg + 1] ?? "src") : "src";
@@ -127,6 +128,13 @@ for (const file of walk(root)) {
 	};
 	visit(sf);
 }
+
+/**
+ * Host errors are user-visible too, but they are thrown in a package this client may not import —
+ * `scripts/i18n-host-messages.ts` derives their templates, and they belong in the registry so a
+ * translation gap in what a toast can say is measured like any other gap.
+ */
+for (const message of HOST_MESSAGES) keys.add(message.key);
 
 /**
  * Built-in extensions describe themselves in the host manifest, and `ExtensionsSettings` renders that

@@ -1,6 +1,7 @@
 import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState } from "react";
+import { t } from "@/i18n";
 import { isConnectedGeneration, useAppStore } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
@@ -97,10 +98,10 @@ export function SubagentTranscriptPane(scope: TranscriptScope) {
 							{error}
 						</span>
 					) : messages === null ? (
-						<span className="text-text-muted tr-text-metadata">Loading…</span>
+						<span className="text-text-muted tr-text-metadata">{t("Loading…")}</span>
 					) : rows.length === 0 ? (
 						<span className="text-text-muted tr-text-metadata italic">
-							Nothing in the transcript yet.
+							{t("Nothing in the transcript yet.")}
 						</span>
 					) : (
 						rows.map((row) => (
@@ -131,17 +132,18 @@ export function SubagentTranscriptDialog({
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
 			<DialogContent
+				closeLabel={t("Close")}
 				onCloseAutoFocus={onCloseAutoFocus}
 				data-testid="subagent-transcript-dialog"
 				className="h-[85vh] max-w-3xl gap-16 p-16"
 			>
 				<div className="flex min-w-0 items-baseline gap-8 pr-8">
 					<DialogTitle className="shrink-0 tr-text-ui text-text-default">
-						Subagent transcript
+						{t("Subagent transcript")}
 					</DialogTitle>
 					<span className="min-w-0 truncate text-text-muted tr-text-metadata">
 						{scope.childSessionId}
-						{status !== "connected" ? " · stale" : ""}
+						{status !== "connected" ? t(" · stale") : ""}
 					</span>
 				</div>
 				<SubagentTranscriptPane key={scope.childSessionId} {...scope} />

@@ -1,4 +1,5 @@
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import {
 	changeSetStat,
 	flatItems,
@@ -47,7 +48,7 @@ function itemLines(item: TodoItem): string[] {
 	}
 	const { count, added, removed } = changeSetStat(set.files);
 	const stat = plusMinus(added, removed);
-	const countText = `${count} ${count === 1 ? "file" : "files"}`;
+	const countText = count === 1 ? t("1 file") : t("{0} files", count);
 	const statLine = [`\`${set.sha.slice(0, 7)}\``, countText, ...(stat ? [stat] : [])].join(" · ");
 	return [
 		`${head} — ${statLine}`,
@@ -70,9 +71,9 @@ export function planToMarkdown(plan: TodoPlan, title: string): string {
 		const overall = planCompletionSummary(plan);
 		// Only worth a section when it adds something over the Progress line above.
 		if (overall || files > 0 || reviewables.length > 0) {
-			const facts = [`${done} ${done === 1 ? "step" : "steps"} done`];
-			if (files > 0) facts.push(`${files} ${files === 1 ? "file" : "files"}`);
-			if (reviewables.length > 0) facts.push(`${reviewed}/${reviewables.length} reviewed`);
+			const facts = [done === 1 ? t("1 step done") : t("{0} steps done", done)];
+			if (files > 0) facts.push(files === 1 ? t("1 file") : t("{0} files", files));
+			if (reviewables.length > 0) facts.push(t("{0}/{1} reviewed", reviewed, reviewables.length));
 			lines.push("", "## Summary", "", facts.join(" · "), ...(overall ? ["", overall] : []));
 		}
 	}

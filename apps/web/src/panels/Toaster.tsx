@@ -15,6 +15,7 @@ import {
 	ToastViewport,
 } from "@thinkrail/ui/toast";
 import { cn } from "@thinkrail/ui/utils";
+import { t } from "@/i18n";
 import type { Toast as ToastType } from "@/store";
 import { useAppStore } from "@/store";
 
@@ -32,41 +33,42 @@ export function Toaster() {
 	const dismissToast = useAppStore((s) => s.dismissToast);
 	return (
 		<ToastProvider swipeDirection="right">
-			{toasts.map((t) => {
-				const { Icon, className: iconClass } = variantIcon[t.variant];
+			{toasts.map((toast) => {
+				const { Icon, className: iconClass } = variantIcon[toast.variant];
 				return (
 					<Toast
-						key={t.id}
-						variant={t.variant}
+						key={toast.id}
+						variant={toast.variant}
 						duration={
-							t.durationMs ?? (t.variant === "error" ? Number.POSITIVE_INFINITY : AUTO_DISMISS_MS)
+							toast.durationMs ??
+							(toast.variant === "error" ? Number.POSITIVE_INFINITY : AUTO_DISMISS_MS)
 						}
 						onOpenChange={(open) => {
-							if (!open) dismissToast(t.id);
+							if (!open) dismissToast(toast.id);
 						}}
 						data-testid="toast"
-						data-variant={t.variant}
+						data-variant={toast.variant}
 					>
 						<div className="flex items-start gap-8">
 							<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
 							<div className="flex min-w-0 flex-1 flex-col gap-4">
-								{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
-								<ToastDescription className={t.title ? undefined : "text-text-default"}>
-									{t.message}
+								{toast.title ? <ToastTitle>{toast.title}</ToastTitle> : null}
+								<ToastDescription className={toast.title ? undefined : "text-text-default"}>
+									{toast.message}
 								</ToastDescription>
 							</div>
-							<ToastClose />
+							<ToastClose aria-label={t("Dismiss")} />
 						</div>
-						{t.action ? (
+						{toast.action ? (
 							<div className="mt-12 flex justify-end">
-								<ToastAction altText={t.action.label} asChild>
+								<ToastAction altText={toast.action.label} asChild>
 									<Button
 										variant="outline"
 										size="sm"
 										data-testid="toast-action"
-										onClick={t.action.onClick}
+										onClick={toast.action.onClick}
 									>
-										{t.action.label}
+										{toast.action.label}
 									</Button>
 								</ToastAction>
 							</div>
@@ -74,7 +76,9 @@ export function Toaster() {
 					</Toast>
 				);
 			})}
-			<ToastViewport />
+			{/* The viewport is the live region screen readers announce toasts from; its default
+			    name comes from Radix in English, so it is named here where the catalog lives. */}
+			<ToastViewport label={t("Notifications ({0})", "F8")} />
 		</ToastProvider>
 	);
 }

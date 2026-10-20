@@ -1,5 +1,6 @@
 import { RiPlugLine } from "@remixicon/react";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { t } from "@/i18n";
 import { McpActions, useMcpFailureText } from "./McpActions";
 import { McpArgs, McpHeader, McpOutput, McpRunning, McpServerTool } from "./McpCardParts";
 import { McpStructuredContent } from "./McpJsonTree";
@@ -27,7 +28,7 @@ export function McpToolCard({ toolCallId, toolName, args, result, status }: Tool
 			</McpHeader>
 			<McpArgs id={`${toolCallId}:args`} args={args} />
 			{status === "running" ? (
-				<McpRunning label={text.trim().split("\n").at(-1) || `Calling ${tool || toolName}…`} />
+				<McpRunning label={text.trim().split("\n").at(-1) || t("Calling {0}…", tool || toolName)} />
 			) : (
 				<>
 					<McpOutput id={`${toolCallId}:content`} text={shown} result={result} failed={failed} />

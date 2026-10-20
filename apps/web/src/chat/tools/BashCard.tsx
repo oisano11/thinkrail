@@ -1,5 +1,7 @@
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 
+import { t } from "@/i18n";
+
 export function BashCard({ args, result, status }: ToolRenderProps) {
 	const command = strArg(args, "command");
 	const output = resultText(result);
@@ -17,7 +19,7 @@ export function BashCard({ args, result, status }: ToolRenderProps) {
 			<pre
 				className={`overflow-auto px-8 py-4 tr-code-text leading-relaxed ${isError ? "text-feedback-error" : "text-text-default"}`}
 			>
-				{output || (status === "running" ? "Running…" : "(no output)")}
+				{output || (status === "running" ? t("Running…") : t("(no output)"))}
 			</pre>
 		</div>
 	);

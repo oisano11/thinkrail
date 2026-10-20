@@ -4,6 +4,7 @@ import {
 } from "@remixicon/react";
 import { Button } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useState } from "react";
+import { t } from "@/i18n";
 import type { ReviewThread } from "@/resources";
 import type { JsonDiffMark } from "./jsonDiff";
 import { type JsonNode, jsonPrimitiveLabel } from "./jsonScanner";
@@ -74,7 +75,7 @@ export function JsonTree({
 						variant="ghost"
 						size="icon"
 						className="size-24 shrink-0"
-						aria-label={expanded ? "Collapse JSON node" : "Expand JSON node"}
+						aria-label={expanded ? t("Collapse JSON node") : t("Expand JSON node")}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
 					>
@@ -100,7 +101,7 @@ export function JsonTree({
 							<button
 								key={entry.thread.id}
 								type="button"
-								aria-label={`Show comment ${entry.number}`}
+								aria-label={t("Show comment {0}", entry.number)}
 								className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 								onClick={() => onMarker(entry.thread.id)}
 							>

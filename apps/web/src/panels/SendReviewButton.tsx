@@ -1,5 +1,6 @@
 import { RiSendPlaneLine as Send } from "@remixicon/react";
 import { useMemo, useState } from "react";
+import { t } from "@/i18n";
 import { useAppStore } from "../store";
 import { allDraftIds, fileDraftIds } from "./reviewModel";
 import { sendReviewBatch } from "./reviewSend";
@@ -18,7 +19,7 @@ export function SendReviewButton({
 	return (
 		<SendButtonBase
 			testid={testid}
-			label={`Send review (${draftIds.length})`}
+			label={t("Send review ({0})", draftIds.length)}
 			count={draftIds.length}
 			send={() => sendReviewBatch(workspaceId, draftIds)}
 		/>
@@ -28,10 +29,11 @@ export function SendReviewButton({
 export function SendAllReviewsButton({
 	workspaceId,
 	testid = "review-send-all",
-	verb = "Send all",
+	verb,
 }: {
 	workspaceId: string;
 	testid?: string;
+	/** Already translated by the caller; the default label is translated here. */
 	verb?: string;
 }) {
 	const comments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
@@ -39,7 +41,7 @@ export function SendAllReviewsButton({
 	return (
 		<SendButtonBase
 			testid={testid}
-			label={`${verb} (${count})`}
+			label={t("{0} ({1})", verb ?? t("Send all"), count)}
 			count={count}
 			send={() => sendReviewBatch(workspaceId)}
 		/>

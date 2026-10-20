@@ -5,6 +5,7 @@ import {
 } from "@remixicon/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
+import { t } from "@/i18n";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
@@ -42,6 +43,7 @@ import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
+// Kept in English so the map stays language-independent; both read sites translate it.
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
 	connecting: "Connecting…",
@@ -163,7 +165,7 @@ export function Shell() {
 						data-testid="connection-status"
 						data-status={status}
 						role="status"
-						aria-label={STATUS_LABEL[status]}
+						aria-label={t(STATUS_LABEL[status])}
 						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
 					>
 						<StatusDot
@@ -171,14 +173,16 @@ export function Shell() {
 							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
 						/>
 						<span aria-hidden="true" className="hidden sm:inline">
-							{STATUS_LABEL[status]}
+							{t(STATUS_LABEL[status])}
 						</span>
 					</span>
-					<IconTooltip label={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}>
+					<IconTooltip
+						label={settingsShortcut ? t("Settings ({0})", settingsShortcut) : t("Settings")}
+					>
 						<button
 							type="button"
 							data-testid="open-settings"
-							aria-label="Settings"
+							aria-label={t("Settings")}
 							onClick={() => useAppStore.getState().openSettings()}
 							className="flex size-28 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>

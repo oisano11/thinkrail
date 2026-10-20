@@ -8,6 +8,7 @@ import {
 	DialogTrigger,
 } from "@thinkrail/ui/dialog";
 import { useState } from "react";
+import { t } from "@/i18n";
 
 function ToolResultImage({ image, label }: { image: ImageContent; label: string }) {
 	const [open, setOpen] = useState(false);
@@ -30,14 +31,15 @@ function ToolResultImage({ image, label }: { image: ImageContent; label: string 
 					<button
 						type="button"
 						data-testid="tool-result-image-fullscreen"
-						aria-label={`View ${label} full screen`}
-						title="Full screen"
+						aria-label={t("View {0} full screen", label)}
+						title={t("Full screen")}
 						className="absolute top-4 right-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Maximize2 className="size-14" />
 					</button>
 				</DialogTrigger>
 				<DialogContent
+					closeLabel={t("Close")}
 					data-testid="tool-result-image-dialog"
 					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
 				>
@@ -66,7 +68,9 @@ export function ToolResultImages({ images, label }: { images: ImageContent[]; la
 				<ToolResultImage
 					key={`${image.mimeType}:${image.data.length}:${image.data.slice(-24)}:${index}`}
 					image={image}
-					label={images.length === 1 ? label : `${label} (${index + 1} of ${images.length})`}
+					label={
+						images.length === 1 ? label : t("{0} ({1} of {2})", label, index + 1, images.length)
+					}
 				/>
 			))}
 		</div>
