@@ -1,8 +1,11 @@
+import { t } from "../../i18n";
 import type { ResourceRenderer } from "../../registry";
 
 export const codeRenderer: ResourceRenderer = {
 	id: "thinkrail/code",
-	label: "Source",
+	get label() {
+		return t("Source");
+	},
 	match: { text: true },
 	rank: 100,
 	capabilities: {

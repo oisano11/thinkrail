@@ -4,11 +4,13 @@ import type {
 	McpServerScope,
 	McpServerSummary,
 } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 
 export type McpEditableExposure = Exclude<McpExposure, "codemode">;
 
 export const MCP_EXPOSURES: readonly McpEditableExposure[] = ["deferred", "direct", "hidden"];
 
+/** Kept in English so the map stays language-independent; read sites translate it. */
 export const MCP_EXPOSURE_HINT: Readonly<Record<McpEditableExposure, string>> = {
 	deferred: "Loaded through tool search when the model needs them.",
 	direct: "Declared to the model up front, like a built-in tool.",
@@ -87,9 +89,8 @@ function mapValues(
 }
 
 function joinLabels(labels: readonly string[]): string {
-	return labels.length < 2
-		? (labels[0] ?? "")
-		: `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+	if (labels.length < 2) return labels[0] ?? "";
+	return t("{0} and {1}", labels.slice(0, -1).join(t(", ")), labels.at(-1) ?? "");
 }
 
 function namespaceOf(name: string): string {
@@ -167,14 +168,19 @@ export function mcpUrlCredentials(
 
 function literalIssue(labels: readonly string[]): string | undefined {
 	if (labels.length === 0) return undefined;
-	const verb = labels.length === 1 ? "is not a reference" : "are not references";
-	return `${joinLabels(labels)} ${verb}. ${REFERENCE_HINT}`;
+	return labels.length === 1
+		? t("{0} is not a reference. {1}", joinLabels(labels), t(REFERENCE_HINT))
+		: t("{0} are not references. {1}", joinLabels(labels), t(REFERENCE_HINT));
 }
 
 function urlIssue(labels: readonly string[]): string | undefined {
 	return labels.length === 0
 		? undefined
-		: `The URL carries a credential (${labels.join(", ")}). pi sends the URL as written — pass the secret in a header instead, such as Authorization: Bearer \${TOKEN}.`;
+		: t(
+				// biome-ignore lint/suspicious/noTemplateCurlyInString: `${TOKEN}` is the literal header value the copy shows, not an interpolation.
+				"The URL carries a credential ({0}). pi sends the URL as written. Pass the secret in a header instead, such as Authorization: Bearer ${TOKEN}.",
+				labels.join(t(", ")),
+			);
 }
 
 function present(...issues: (string | undefined)[]): string[] {
@@ -277,7 +283,19 @@ export function mcpEditedEntry(
 	const hidden =
 		unresolved.length === 0
 			? undefined
-			: `${joinLabels(unresolved)} still ${unresolved.length === 1 ? "shows" : "show"} ${MCP_HIDDEN_VALUE}, which keeps only a value the file already has under that name. ${REFERENCE_HINT}`;
+			: unresolved.length === 1
+				? t(
+						"{0} still shows {1}, which keeps only a value the file already has under that name. {2}",
+						joinLabels(unresolved),
+						MCP_HIDDEN_VALUE,
+						t(REFERENCE_HINT),
+					)
+				: t(
+						"{0} still show {1}, which keeps only a value the file already has under that name. {2}",
+						joinLabels(unresolved),
+						MCP_HIDDEN_VALUE,
+						t(REFERENCE_HINT),
+					);
 	return {
 		entry,
 		issues: present(
@@ -299,16 +317,20 @@ export function mcpNameIssue(
 	existing: readonly Pick<McpServerSummary, "name" | "scope">[],
 	siblings: readonly string[] = [],
 ): string | undefined {
-	if (!name) return "Name the server.";
-	if (!SERVER_NAME.test(name)) return "Use letters, digits, - and _ only.";
+	if (!name) return t("Name the server.");
+	if (!SERVER_NAME.test(name)) return t("Use letters, digits, - and _ only.");
 	if (existing.some((server) => server.scope === scope && server.name === name)) {
-		return `"${name}" already exists in ${scope === "user" ? "your user servers" : "this project"}.`;
+		return t(
+			'"{0}" already exists in {1}.',
+			name,
+			scope === "user" ? "your user servers" : "this project",
+		);
 	}
 	const twin = [...existing.map((server) => server.name), ...siblings].find(
 		(other) => other !== name && namespaceOf(other) === namespaceOf(name),
 	);
 	return twin
-		? `Clashes with "${twin}" — names that differ only in - and _ share tools.`
+		? t('Clashes with "{0}": names that differ only in - and _ share tools.', twin)
 		: undefined;
 }
 
@@ -320,8 +342,8 @@ export function mcpNameWarning(
 	const other = existing.find((server) => server.name === name && server.scope !== scope);
 	if (!other) return undefined;
 	return scope === "project"
-		? `Replaces your user-level "${name}" in this project.`
-		: `This project's own "${name}" takes precedence here.`;
+		? t('Replaces your user-level "{0}" in this project.', name)
+		: t('This project\'s own "{0}" takes precedence here.', name);
 }
 
 export function emptyMcpDraft(): McpFormDraft {
@@ -374,15 +396,15 @@ export function validateMcpDraft(
 	if (name) issues.name = name;
 	if (draft.transport === "http") {
 		const url = draft.url.trim();
-		if (!url) issues.url = "Enter the server URL.";
+		if (!url) issues.url = t("Enter the server URL.");
 		else if (!URL.canParse(url) || !/^https?:$/.test(new URL(url).protocol)) {
-			issues.url = "Use an http:// or https:// URL.";
+			issues.url = t("Use an http:// or https:// URL.");
 		} else {
 			const credential = urlIssue(mcpUrlCredentials({ url }));
 			if (credential) issues.url = credential;
 		}
 	} else if (!draft.command.trim()) {
-		issues.command = "Enter the executable to run.";
+		issues.command = t("Enter the executable to run.");
 	}
 	const rows = draft.values;
 	const kind = draft.transport === "http" ? "header" : "variable";
@@ -390,8 +412,9 @@ export function validateMcpDraft(
 	const plain = literalIssue(
 		rows.filter((row) => !isConfigReference(row.value)).map((row) => `"${row.name.trim()}"`),
 	);
-	if (names.some((entry) => entry === "")) issues.values = `Name every ${kind}.`;
-	else if (new Set(names).size !== names.length) issues.values = `Each ${kind} name appears once.`;
+	if (names.some((entry) => entry === "")) issues.values = t("Name every {0}.", kind);
+	else if (new Set(names).size !== names.length)
+		issues.values = t("Each {0} name appears once.", kind);
 	else if (plain) issues.values = plain;
 	return issues;
 }
@@ -399,10 +422,10 @@ export function validateMcpDraft(
 export function mcpDraftWarnings(draft: McpFormDraft): string[] {
 	const warnings: string[] = [];
 	if (draft.transport === "stdio" && /\s/.test(draft.command.trim())) {
-		warnings.push("The command is one executable — put each argument on its own line below.");
+		warnings.push(t("The command is one executable — put each argument on its own line below."));
 	}
 	if (draft.transport === "http" && /\/sse\/?$/.test(draft.url.trim())) {
-		warnings.push("SSE is not supported — use the server's streamable HTTP URL (often /mcp).");
+		warnings.push(t("SSE is not supported — use the server's streamable HTTP URL (often /mcp)."));
 	}
 	return warnings;
 }
@@ -416,27 +439,27 @@ interface McpImportServer {
 type McpImportResult = { ok: true; servers: McpImportServer[] } | { ok: false; error: string };
 
 export function mcpEntryErrors(entry: unknown): string[] {
-	if (!isRecord(entry)) return ["The entry must be an object."];
+	if (!isRecord(entry)) return [t("The entry must be an object.")];
 	const errors: string[] = [];
 	const type = entry.type;
-	if (type === "sse") errors.push("SSE is not supported — use the streamable HTTP URL.");
+	if (type === "sse") errors.push(t("SSE is not supported — use the streamable HTTP URL."));
 	else if (type !== undefined && (typeof type !== "string" || !TYPES.has(type))) {
-		errors.push('"type" must be stdio, http or streamable-http.');
+		errors.push(t('"type" must be stdio, http or streamable-http.'));
 	}
 	const hasUrl = typeof entry.url === "string";
 	if (hasUrl) {
 		const url = entry.url as string;
 		if (!URL.canParse(url) || !/^https?:$/.test(new URL(url).protocol)) {
-			errors.push('"url" must be an http or https URL.');
+			errors.push(t('"url" must be an http or https URL.'));
 		}
 	} else if (typeof entry.command !== "string" || entry.command === "") {
-		errors.push('Needs "command" (stdio) or "url" (HTTP).');
+		errors.push(t('Needs "command" (stdio) or "url" (HTTP).'));
 	}
 	if (
 		entry.args !== undefined &&
 		!(Array.isArray(entry.args) && entry.args.every((arg) => typeof arg === "string"))
 	) {
-		errors.push('"args" must be a list of strings.');
+		errors.push(t('"args" must be a list of strings.'));
 	}
 	for (const key of ["env", "headers"] as const) {
 		const value = entry[key];
@@ -444,17 +467,17 @@ export function mcpEntryErrors(entry: unknown): string[] {
 			value !== undefined &&
 			(!isRecord(value) || stringEntries(value).length !== Object.keys(value).length)
 		) {
-			errors.push(`"${key}" must map names to strings.`);
+			errors.push(t('"{0}" must map names to strings.', key));
 		}
 	}
 	if (
 		entry.exposure !== undefined &&
 		!["codemode", "codemode-deferred", ...MCP_EXPOSURES].includes(String(entry.exposure))
 	) {
-		errors.push('"exposure" must be deferred, direct or hidden.');
+		errors.push(t('"exposure" must be deferred, direct or hidden.'));
 	}
 	if (entry.enabled !== undefined && typeof entry.enabled !== "boolean") {
-		errors.push('"enabled" must be true or false.');
+		errors.push(t('"enabled" must be true or false.'));
 	}
 	return errors;
 }
@@ -466,16 +489,16 @@ export function parseMcpServersJson(text: string): McpImportResult {
 	} catch (error) {
 		return {
 			ok: false,
-			error: `Not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+			error: t("Not valid JSON: {0}", error instanceof Error ? error.message : String(error)),
 		};
 	}
-	if (!isRecord(parsed)) return { ok: false, error: "Paste a JSON object of servers." };
+	if (!isRecord(parsed)) return { ok: false, error: t("Paste a JSON object of servers.") };
 	const map = "mcpServers" in parsed ? parsed.mcpServers : parsed;
-	if (!isRecord(map)) return { ok: false, error: '"mcpServers" must be an object.' };
+	if (!isRecord(map)) return { ok: false, error: t('"mcpServers" must be an object.') };
 	if (["command", "url", "type"].some((key) => key in map && !isRecord(map[key]))) {
 		return {
 			ok: false,
-			error: 'This looks like one server\'s settings — name it: { "docs": { … } }.',
+			error: t('This looks like one server\'s settings. Name it: { "docs": { … } }.'),
 		};
 	}
 	const servers = Object.entries(map).map(([name, entry]) => ({
@@ -483,7 +506,7 @@ export function parseMcpServersJson(text: string): McpImportResult {
 		entry: isRecord(entry) ? entry : {},
 		errors: mcpEntryErrors(entry),
 	}));
-	if (servers.length === 0) return { ok: false, error: "No servers found." };
+	if (servers.length === 0) return { ok: false, error: t("No servers found.") };
 	return { ok: true, servers };
 }
 
@@ -503,7 +526,7 @@ export function importIssues(
 		...(name ? [name] : []),
 		...server.errors,
 		...(scope === "project" && server.entry.auth !== undefined
-			? ['"auth" is only allowed in your user servers.']
+			? [t('"auth" is only allowed in your user servers.')]
 			: []),
 		...mcpSecretIssues(server.entry),
 	];
@@ -551,11 +574,12 @@ export function projectEntryFrom(content: string, name: string): McpServerEntryI
 	try {
 		parsed = JSON.parse(content);
 	} catch {
-		throw new Error("The project's .pi/mcp.json is not valid JSON.");
+		throw new Error(t(t("The project's .pi/mcp.json is not valid JSON.")));
 	}
 	const servers = isRecord(parsed) ? parsed.mcpServers : undefined;
 	const entry = isRecord(servers) ? servers[name] : undefined;
-	if (!isRecord(entry)) throw new Error(`The project's .pi/mcp.json no longer defines "${name}".`);
+	if (!isRecord(entry))
+		throw new Error(t('The project\'s .pi/mcp.json no longer defines "{0}".', name));
 	return entry;
 }
 

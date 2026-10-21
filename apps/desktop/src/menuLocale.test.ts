@@ -2,10 +2,12 @@ import { expect, test } from "bun:test";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
 import { desktopApplicationMenu } from "./applicationMenu";
 import {
+	localeFromAppleLanguages,
 	localeFromPreferences,
 	menuLabel,
 	normalizeMenuLocale,
 	resolveMenuLocale,
+	systemLocale,
 } from "./menuLocale";
 
 /**
@@ -32,8 +34,13 @@ test("localizes the macOS menu labels while keeping the roles the platform owns"
 	expect(labelAt(submenuAt(chinese?.[0])[2])).toBe("设置…");
 	expect(labelAt(submenuAt(english?.[0])[2])).toBe("Settings…");
 	expect(labelAt(submenuAt(chinese?.[0]).at(-1))).toBe("退出 ThinkRail");
-	// `role` items are rendered by the OS; a locale must not replace them with our own wording.
-	expect(submenuAt(chinese?.[1])[0]).toEqual({ role: "undo" });
+	// `role` items keep the platform's behaviour, but carry our wording: the platform only knows English
+	// unless the whole bundle is localised.
+	expect(submenuAt(chinese?.[1])[0]).toEqual({ role: "undo", label: "撤销" });
+	expect(submenuAt(english?.[1])[0]).toEqual({ role: "undo", label: "Undo" });
+	expect(labelAt(submenuAt(chinese?.[1])[5])).toBe("粘贴");
+	expect(labelAt(submenuAt(chinese?.[2])[0])).toBe("最小化");
+	expect(labelAt(submenuAt(chinese?.[0])[0])).toBe("关于 ThinkRail");
 });
 
 test("keeps the English menu byte-identical to the shipped one", () => {
@@ -96,4 +103,14 @@ test("normalizes locale tags the way the client does", () => {
 
 test("resolves the menu locale from an unreadable preference path without throwing", () => {
 	expect(resolveMenuLocale("/nonexistent/preferences.json")).toBe(resolveMenuLocale(undefined));
+});
+
+test("reads the first language macOS lists, which a Finder launch does not export", () => {
+	// `defaults read -g AppleLanguages` prints an old-style property list on one line.
+	expect(localeFromAppleLanguages('(\n    "zh-Hans-CN",\n    "en-US"\n)')).toBe("zh-CN");
+	expect(localeFromAppleLanguages('(\n    "en-US",\n    "zh-Hans-CN"\n)')).toBe("en");
+	expect(localeFromAppleLanguages('(\n    "fr-FR"\n)')).toBeNull();
+	expect(localeFromAppleLanguages("")).toBeNull();
+	// Whatever this host runs, the probe answers with a locale the menu has labels for, or nothing.
+	expect([null, "en", "zh-CN"]).toContain(systemLocale());
 });

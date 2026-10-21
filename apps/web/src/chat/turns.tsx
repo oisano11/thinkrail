@@ -30,6 +30,7 @@ import {
 	useState,
 } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
+import { t } from "@/i18n";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { AssistantMarkdown } from "./assistantLinks";
@@ -212,12 +213,13 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 			<FileChip
 				data-testid="chat-attachment-chip"
 				title={label}
-				aria-label={`View attachment ${label}`}
+				aria-label={t("View attachment {0}", label)}
 				onClick={() => setOpen(true)}
 				label={label}
 			/>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
+					closeLabel={t("Close")}
 					data-testid="chat-attachment-dialog"
 					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-8"
 				>
@@ -381,7 +383,7 @@ function PlainUserTurn({
 							) : (
 								<ChevronDown className="size-16 shrink-0" />
 							)}
-							{expanded ? "Show less" : "Show more"}
+							{expanded ? t("Show less") : t("Show more")}
 						</button>
 					) : null}
 				</div>
@@ -410,12 +412,16 @@ function SkillInvocationCard({
 				type="button"
 				data-testid="skill-invocation-toggle"
 				aria-expanded={expanded}
-				aria-label={`${expanded ? "Hide" : "Show"} instructions for ${invocation.name}`}
+				aria-label={
+					expanded
+						? t("Hide instructions for {0}", invocation.name)
+						: t("Show instructions for {0}", invocation.name)
+				}
 				onClick={toggle}
 				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<BookOpen className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
-				<span className="shrink-0 tr-text-ui text-text-muted">Skill</span>
+				<span className="shrink-0 tr-text-ui text-text-muted">{t("Skill")}</span>
 				<span className="shrink-0 text-text-subtle" aria-hidden="true">
 					·
 				</span>
@@ -538,11 +544,11 @@ function CompactionTurn({
 	resuming?: boolean | undefined;
 }) {
 	const [open, toggle, toggleRef] = useFold(id);
-	const label = resuming ? "Context compacted — resuming…" : "Context compacted";
+	const label = resuming ? t("Context compacted — resuming…") : t("Context compacted");
 	const tokens =
 		tokensAfter === undefined
-			? `${formatTokens(tokensBefore)} tokens`
-			: `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`;
+			? t("{0} tokens", formatTokens(tokensBefore))
+			: t("{0} → {1} tokens", formatTokens(tokensBefore), formatTokens(tokensAfter));
 	return (
 		<div data-testid="chat-compaction" data-chat-fold-root className="flex flex-col gap-8">
 			<button
@@ -583,7 +589,7 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 				<div className="flex justify-end">
 					<Button variant="outline" size="sm" data-testid="agent-try-again" onClick={onTryAgain}>
 						<RotateCw className="size-12" />
-						Try again
+						{t("Try again")}
 					</Button>
 				</div>
 			) : null}
@@ -607,22 +613,22 @@ function CompactionNotice({
 			>
 				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
-					{detail || "Compaction failed."}
+					{detail || t("Compaction failed.")}
 				</span>
 			</div>
 		);
 	}
 	const label =
 		status === "running"
-			? "Compacting context…"
+			? t("Compacting context…")
 			: status === "cancelled"
-				? "Compaction cancelled"
+				? t("Compaction cancelled")
 				: resuming
-					? "Context compacted — resuming…"
-					: "Context compacted";
+					? t("Context compacted — resuming…")
+					: t("Context compacted");
 	const tokens =
 		tokensBefore != null && tokensAfter != null
-			? `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`
+			? t("{0} → {1} tokens", formatTokens(tokensBefore), formatTokens(tokensAfter))
 			: null;
 	return (
 		<div
@@ -666,7 +672,7 @@ function RetryIndicator({
 		>
 			<span className="flex items-center gap-4">
 				<RotateCw className="size-12 shrink-0" />
-				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
+				{source === "summarization" ? t("Retrying summarization") : t("Retrying")} ({attempt}/
 				{maxAttempts})…
 			</span>
 			<div className="h-4 w-full overflow-hidden rounded-full bg-border-default">
@@ -832,7 +838,7 @@ export function TurnDivider({
 			id: "specs",
 			icon: FileText,
 			paths: specs,
-			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
+			label: (n) => (n === 1 ? t("1 spec") : t("{0} specs", n)),
 			expanded: selected === "specs",
 			onOpen: onOpenSpec,
 			reveal: () => onReveal("specs"),
@@ -841,10 +847,10 @@ export function TurnDivider({
 			id: "files",
 			icon: FileDiffGlyph,
 			paths: changedFiles,
-			label: (n) =>
-				`${n} ${n === 1 ? "file changed" : "files changed"}${
-					totals ? ` · +${totals.added} −${totals.removed}` : ""
-				}`,
+			label: (n) => {
+				const changed = n === 1 ? t("1 file changed") : t("{0} files changed", n);
+				return totals ? t("{0} · +{1} −{2}", changed, totals.added, totals.removed) : changed;
+			},
 			expanded: selected === "files",
 			onOpen: onOpenChange,
 			reveal: () => onReveal("changes"),
@@ -873,7 +879,7 @@ export function TurnDivider({
 				{toolCount > 0 ? (
 					<span className="flex items-center gap-4">
 						<Wrench className="size-12 shrink-0" />
-						{toolCount} {toolCount === 1 ? "tool call" : "tool calls"}
+						{toolCount === 1 ? t("1 tool call") : t("{0} tool calls", toolCount)}
 					</span>
 				) : null}
 				{groups.map((group) => (
@@ -892,7 +898,7 @@ export function TurnDivider({
 						className="flex items-center gap-4 rounded-sm px-4 text-primary hover:bg-control-bg-hovered"
 					>
 						<Eye className="size-12 shrink-0" />
-						Review turn
+						{t("Review turn")}
 					</button>
 				) : null}
 				{elapsedMs != null && elapsedMs >= 1000 ? (
@@ -909,7 +915,7 @@ export function TurnDivider({
 						className="flex items-center gap-4 rounded-full border border-primary-muted bg-primary-subtle px-8 text-primary hover:bg-primary-soft"
 					>
 						<Stack className="size-12 shrink-0 motion-safe:animate-working" />
-						{running.count} still running
+						{running.count === 1 ? t("1 still running") : t("{0} still running", running.count)}
 					</button>
 				) : null}
 				<span className="h-px flex-1 bg-border-muted" />

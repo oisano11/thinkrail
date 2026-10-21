@@ -7,6 +7,7 @@ import {
 	type SystemThemePair,
 	type ThemeId,
 } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import {
 	asStablePreferenceAdapter,
 	getStablePreferenceAdapter,
@@ -139,7 +140,7 @@ export function buildThemeCatalog(candidates: Record<string, unknown>): ThemeCat
 	}
 	const appearances = new Set([...byId.values()].map((theme) => theme.appearance));
 	if (!appearances.has("light") || !appearances.has("dark")) {
-		throw new Error("The bundled theme catalog must include light and dark themes");
+		throw new Error(t(t("The bundled theme catalog must include light and dark themes")));
 	}
 	const list = Object.freeze(
 		[...byId.values()]

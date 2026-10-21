@@ -1,5 +1,6 @@
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
+import { t } from "../i18n";
 import type { AnchorDraft, SurfaceReview } from "../registry";
 import {
 	type ReviewTextBinding,
@@ -81,7 +82,7 @@ export function ReviewComposer({
 				ref={inputRef}
 				data-testid="review-composer-input"
 				className="review-composer-input tr-text-ui"
-				placeholder="Leave a review comment…"
+				placeholder={t("Leave a review comment…")}
 				value={text}
 				disabled={busy}
 				onChange={(event) => {
@@ -109,7 +110,7 @@ export function ReviewComposer({
 					disabled={busy || !text.trim()}
 					onClick={() => submit(commenting.onSave)}
 				>
-					Save draft
+					{t("Save draft")}
 				</button>
 				<button
 					type="button"
@@ -118,7 +119,7 @@ export function ReviewComposer({
 					disabled={busy || !text.trim()}
 					onClick={() => submit(commenting.onSend)}
 				>
-					Send now
+					{t("Send now")}
 				</button>
 				<button
 					type="button"
@@ -126,7 +127,7 @@ export function ReviewComposer({
 					className="review-composer-btn review-composer-btn-quiet tr-text-action"
 					onClick={onClose}
 				>
-					Cancel
+					{t("Cancel")}
 				</button>
 			</div>
 		</div>

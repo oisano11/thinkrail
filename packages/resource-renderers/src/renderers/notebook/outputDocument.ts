@@ -5,6 +5,7 @@ export const NOTEBOOK_HTML_CSP = HTML_PREVIEW_CSP;
 export const NOTEBOOK_IMAGE_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'";
 
 function documentWithCsp(content: string, csp: string): string {
+	// A document shell, not interface copy: the localisation layer must not rewrite markup.
 	return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body>${content}</body></html>`;
 }
 

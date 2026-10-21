@@ -16,6 +16,7 @@ export {
 	useOptionalResourceHost,
 	useResourceScope,
 } from "./host";
+export { type ResourceTranslator, setResourceTranslator } from "./i18n";
 export {
 	type AnchorDraft,
 	anchorLabel,

@@ -18,6 +18,7 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
+import { t } from "@/i18n";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
 import {
@@ -60,7 +61,7 @@ export function SpecsPanel({
 			)
 		) : nodes.length === 0 ? (
 			failed ? null : (
-				<p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>
+				<p className="px-4 py-4 tr-text-metadata text-text-muted">{t("No specs")}</p>
 			)
 		) : (
 			<ul className="flex flex-col motion-safe:animate-reveal">
@@ -84,11 +85,11 @@ export function SpecsPanel({
 					className="flex items-center gap-8 rounded-sm border border-feedback-error-muted bg-feedback-error-subtle px-8 py-4 tr-text-metadata text-text-default"
 				>
 					<span className="min-w-0 flex-1">
-						{nodes === null ? "Couldn't load specs." : "Couldn't update specs."}
+						{nodes === null ? t("Couldn't load specs.") : t("Couldn't update specs.")}
 					</span>
 					<Button variant="ghost" size="sm" data-testid="specs-retry" onClick={onRetry}>
 						<RefreshCw className="size-14" />
-						Retry
+						{t("Retry")}
 					</Button>
 				</div>
 			) : null}
@@ -148,7 +149,7 @@ function SpecNodeRow({
 					<button
 						type="button"
 						data-testid="spec-toggle"
-						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
+						aria-label={expanded ? t("Collapse {0}", node.title) : t("Expand {0}", node.title)}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
 						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-sm text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
@@ -168,7 +169,7 @@ function SpecNodeRow({
 					data-active={isActive}
 					data-depth={depth}
 					aria-current={isActive ? "page" : undefined}
-					aria-label={`Open ${node.title}. ${isMainSpec ? "Main spec" : role}`}
+					aria-label={t("Open {0}. {1}", node.title, isMainSpec ? t("Main spec") : role)}
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}

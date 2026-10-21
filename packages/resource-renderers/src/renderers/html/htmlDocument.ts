@@ -74,6 +74,7 @@ function installPreviewPolicy(document: Document): void {
 export function prepareHtmlPreviewDocument(document: Document): string {
 	sanitizeHtmlDocument(document);
 	installPreviewPolicy(document);
+	// A document shell, not interface copy: the localisation layer must not rewrite markup.
 	return `<!doctype html>${document.documentElement.outerHTML}`;
 }
 

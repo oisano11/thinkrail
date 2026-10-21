@@ -1,5 +1,6 @@
 import type { AnnotationSide, FileDiffMetadata, Hunk, SelectedLineRange } from "@pierre/diffs";
 import { type RefObject, useEffect } from "react";
+import { t } from "../../i18n";
 import type { AnchorDraft, ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import type { PierreVirtualizer } from "./pierreVirtualizer";
 
@@ -46,8 +47,11 @@ export interface BlockedSelection {
 	message: string;
 }
 
-export const CROSS_SIDE_MESSAGE =
-	"A comment anchors to one side of the diff. Select lines in either the original or the new text.";
+export function crossSideMessage(): string {
+	return t(
+		"A comment anchors to one side of the diff. Select lines in either the original or the new text.",
+	);
+}
 
 export function selectionComposer(
 	range: SelectedLineRange,
@@ -61,7 +65,7 @@ export function selectionComposer(
 			id,
 			side: endSide,
 			lineNumber: range.end,
-			message: CROSS_SIDE_MESSAGE,
+			message: crossSideMessage(),
 		};
 	}
 	const startLine = Math.min(range.start, range.end);

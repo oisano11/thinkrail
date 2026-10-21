@@ -16,6 +16,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { useState } from "react";
+import { t } from "@/i18n";
 import { copyText } from "@/lib";
 
 export type PrSetupState =
@@ -37,7 +38,7 @@ function CommandRow({ command, onRun }: { command: string; onRun: (command: stri
 				variant="ghost"
 				size="icon"
 				data-testid="open-pr-setup-copy"
-				aria-label="Copy command"
+				aria-label={t("Copy command")}
 				onClick={() => void copy()}
 			>
 				{copied ? (
@@ -50,16 +51,17 @@ function CommandRow({ command, onRun }: { command: string; onRun: (command: stri
 				variant="outline"
 				size="sm"
 				data-testid="open-pr-setup-run"
-				title="Run this command in a workspace terminal — answer its prompts there"
+				title={t("Run this command in a workspace terminal — answer its prompts there")}
 				onClick={() => onRun(command)}
 			>
 				<Play className="size-14" />
-				Run
+				{t("Run")}
 			</Button>
 		</div>
 	);
 }
 
+// Both maps stay English; the read sites translate them.
 const GH_TITLE: Record<GhSetupProblem, string> = {
 	missing: "GitHub CLI isn't installed",
 	unauthenticated: "GitHub CLI isn't signed in",
@@ -103,7 +105,10 @@ function sshAddCommand(platform: HostPlatform | null): string {
 }
 
 function sshAddHint(platform: HostPlatform | null): string {
-	return platform ? SSH_ADD_HINT[platform] : "SSH remote: load your key into the ssh-agent once.";
+	// The table stays English like every other one; both branches translate at the read site.
+	return t(
+		platform ? SSH_ADD_HINT[platform] : "SSH remote: load your key into the ssh-agent once.",
+	);
 }
 
 function ghCommands(problem: GhSetupProblem, platform: HostPlatform | null): string[] {
@@ -113,8 +118,8 @@ function ghCommands(problem: GhSetupProblem, platform: HostPlatform | null): str
 
 function ghInstallHint(problem: GhSetupProblem, platform: HostPlatform | null): string | null {
 	if (problem !== "missing") return null;
-	if (!platform) return "Install the GitHub CLI first — cli.github.com — then sign in:";
-	return GH_INSTALL_HINT[platform];
+	if (!platform) return t("Install the GitHub CLI first — cli.github.com — then sign in:");
+	return t(GH_INSTALL_HINT[platform] ?? "");
 }
 
 export function PrSetupDialog({
@@ -135,16 +140,18 @@ export function PrSetupDialog({
 	return (
 		<Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
 			<DialogContent
+				closeLabel={t("Close")}
 				data-testid="open-pr-setup-dialog"
 				data-reason={state?.kind === "gh" ? `gh-${state.problem}` : state?.kind}
 			>
 				{state?.kind === "push-auth" ? (
 					<>
 						<DialogHeader>
-							<DialogTitle>Git push couldn't authenticate</DialogTitle>
+							<DialogTitle>{t("Git push couldn't authenticate")}</DialogTitle>
 							<DialogDescription>
-								ThinkRail pushes without a terminal, so SSH passphrase and credential prompts can't
-								appear. Make your git auth non-interactive, then try again.
+								{t(
+									"ThinkRail pushes without a terminal, so SSH passphrase and credential prompts can't appear. Make your git auth non-interactive, then try again.",
+								)}
 							</DialogDescription>
 						</DialogHeader>
 						<pre
@@ -157,8 +164,9 @@ export function PrSetupDialog({
 							{HOST_KEY_PATTERN.test(state.detail) ? (
 								<>
 									<p className="tr-text-ui text-text-muted">
-										This host's SSH key isn't in known_hosts yet — connect once and answer "yes" to
-										approve it:
+										{t(
+											"This host's SSH key isn't in known_hosts yet — connect once and answer \"yes\" to approve it:",
+										)}
 									</p>
 									<CommandRow command="ssh -T git@github.com" onRun={onRun} />
 								</>
@@ -166,7 +174,7 @@ export function PrSetupDialog({
 							<p className="tr-text-ui text-text-muted">{sshAddHint(platform)}</p>
 							<CommandRow command={sshAddCommand(platform)} onRun={onRun} />
 							<p className="tr-text-ui text-text-muted">
-								HTTPS remote: sign in with the GitHub CLI instead.
+								{t("HTTPS remote: sign in with the GitHub CLI instead.")}
 							</p>
 							<CommandRow command="gh auth login" onRun={onRun} />
 						</div>
@@ -174,8 +182,8 @@ export function PrSetupDialog({
 				) : state?.kind === "gh" ? (
 					<>
 						<DialogHeader>
-							<DialogTitle>{GH_TITLE[state.problem]}</DialogTitle>
-							<DialogDescription>{GH_DESCRIPTION[state.problem]}</DialogDescription>
+							<DialogTitle>{t(GH_TITLE[state.problem])}</DialogTitle>
+							<DialogDescription>{t(GH_DESCRIPTION[state.problem])}</DialogDescription>
 						</DialogHeader>
 						<div className="flex flex-col gap-8">
 							{ghInstallHint(state.problem, platform) ? (
@@ -189,8 +197,9 @@ export function PrSetupDialog({
 						</div>
 						{state.compareUrl ? (
 							<p className="tr-text-ui text-text-muted">
-								No rush — GitHub's compare page can create this PR right now, prefilled from the
-								plan.
+								{t(
+									"No rush — GitHub's compare page can create this PR right now, prefilled from the plan.",
+								)}
 							</p>
 						) : null}
 					</>
@@ -206,12 +215,12 @@ export function PrSetupDialog({
 							className={buttonVariants({ variant: "outline" })}
 						>
 							<ExternalLink className="size-14" />
-							Open compare page
+							{t("Open compare page")}
 						</a>
 					) : null}
 					<Button data-testid="open-pr-setup-retry" onClick={onRetry}>
 						<RefreshCw className="size-14" />
-						Try again
+						{t("Try again")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

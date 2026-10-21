@@ -5,6 +5,7 @@ import type {
 	LayoutPresetSideRegion,
 	LayoutToolId,
 } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import { isPreviewCompatibleTabKind } from "../../lib";
 import {
 	collectAllGroups,
@@ -121,7 +122,7 @@ export function resolveLayoutPreset(
 		BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === id) ??
 		customPresets.find((preset) => preset.id === id) ??
 		BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === DEFAULT_LAYOUT_PRESET_ID);
-	if (!resolved) throw new Error("The default layout preset is missing");
+	if (!resolved) throw new Error(t(t("The default layout preset is missing")));
 	return resolved;
 }
 

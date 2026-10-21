@@ -99,7 +99,10 @@ webview surfaces without competing with their local key handling.
 
 macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
 Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
-there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
+there; WebKitGTK keeps its renderer-native editing behavior. Every role item also carries an explicit
+`label` from `src/menuLocale.ts`: Electrobun names a role from its own English table, and the platform only
+translates what the bundle declares, so a role without a label would stay English in every locale. The
+role itself is kept, and with it the native selector behind the item. macOS Command-H, Option-Command-H, and Command-M carry explicit
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
 are custom-action items, not roles; see Confirmed quit and close. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
@@ -109,10 +112,12 @@ pins production wiring.
 
 The startup-failure dialog and the restart-failure dialog are drawn by the desktop process before — or
 instead of — a loaded client, so they cannot reach the web catalog. Their copy comes from
-`src/menuLocale.ts`, the same persisted-preference lookup that localizes the menu, and falls back to the
-OS language and then to the build's default. The message detail stays as thrown: it is a host diagnostic,
-not product copy. Role items carry an explicit `label` from that table, because Electrobun's own role labels
-are English and a non-empty label is what overrides them without losing the role's behaviour.
+`src/menuLocale.ts`, the same persisted-preference lookup that localizes the menu. That lookup reads the
+stored preference, then the POSIX environment, then `AppleLanguages` from the global preference domain — a
+bundle launched from Finder inherits no `LANG`, so the OS preference is the only local signal — and finally
+the build's default. The message detail stays as thrown: it is a host diagnostic, not product copy. Role
+items carry an explicit `label` from that table, because Electrobun's own role labels are English and a
+non-empty label is what overrides them without losing the role's behaviour.
 
 ### Confirmed quit and close
 
@@ -367,7 +372,10 @@ first casualty) and to bundle the separately staged `.ts` server runtime rather 
 bundler. Its transient factory entry is removed even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
 at the next pre-build. On Windows that hook also brands the bundled uninstaller after its resource exists
-but before release compression, wrapping, and signing. Builds in one worktree remain sequential.
+but before release compression, wrapping, and signing. On macOS it declares the bundle's localizations
+(`CFBundleDevelopmentRegion` `en`, `CFBundleLocalizations` `en` then `zh-Hans`) in `Info.plist`, because
+Electrobun writes no such keys and macOS names the items it adds to the Edit menu — dictation, emoji,
+autofill — after that declaration, treating an undeclared bundle as English. Builds in one worktree remain sequential.
 
 Electrobun's platform icon configuration points at one ThinkRail mark in the native formats each target
 requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The native mark preserves its

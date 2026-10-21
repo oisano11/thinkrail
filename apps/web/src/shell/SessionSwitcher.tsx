@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useCallback } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
+import { t } from "@/i18n";
 import { useSessionSwitcher } from "./useSessionSwitcher";
 
 export interface SessionSwitcherProps {
@@ -21,6 +22,7 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
+				closeLabel={t("Close")}
 				className="max-w-md gap-0 overflow-hidden p-0"
 				hideClose
 				data-testid="session-switcher"
@@ -32,13 +34,13 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 				}}
 			>
 				<DialogTitle className="border-border-default border-b px-16 py-12 tr-title-dialog text-text-default">
-					Switch session
+					{t("Switch session")}
 				</DialogTitle>
 				<Command className="bg-transparent" loop shouldFilter={false} vimBindings={false}>
 					<CommandList className="max-h-[min(60vh,420px)] px-8 pt-4 pb-8">
 						{groups.length === 0 ? (
 							<div className="px-8 py-12 text-center text-text-muted tr-text-ui">
-								No active sessions
+								{t("No active sessions")}
 							</div>
 						) : (
 							groups.map((project) => (
@@ -72,7 +74,7 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 												)}
 												<span className="flex min-w-0 flex-1 flex-col">
 													<span className="truncate tr-text-ui text-text-default leading-tight group-data-[selected=true]:text-primary">
-														{session.chatTitle || "Untitled chat"}
+														{session.chatTitle || t("Untitled chat")}
 													</span>
 													{session.workspaceName ? (
 														<span className="truncate text-text-subtle tr-text-metadata leading-tight">

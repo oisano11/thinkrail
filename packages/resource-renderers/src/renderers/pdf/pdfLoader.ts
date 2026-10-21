@@ -1,4 +1,5 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { t } from "../../i18n";
 import type { ResourceContent } from "../../registry";
 import { pdfSourceUrl } from "./pdfModel";
 
@@ -64,7 +65,7 @@ export class PdfRenderQueue {
 					signal?.removeEventListener("abort", onAbort);
 					const index = this.pending.indexOf(entry);
 					if (index >= 0) this.pending.splice(index, 1);
-					reject(new Error("PDF render cancelled"));
+					reject(new Error(t(t("PDF render cancelled"))));
 					this.drain();
 				},
 			};

@@ -23,6 +23,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import type { LoginState } from "../auth";
 import {
 	compactAge,
@@ -295,7 +296,7 @@ export function settledReasonLabel(reason: SettledReason, now: number): string {
 		case "review":
 			return reason.state;
 		case "idle":
-			return `idle ${compactAge(reason.since, now)}`;
+			return t("idle {0}", compactAge(reason.since, now));
 	}
 }
 
@@ -303,12 +304,12 @@ export function settledReasonTitle(reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
 			return reason.since === undefined
-				? "Settled by you"
-				: `Settled by you ${relativeTime(reason.since, now)}`;
+				? t("Settled by you")
+				: t("Settled by you {0}", relativeTime(reason.since, now));
 		case "review":
-			return reason.state === "merged" ? "Pull request merged" : "Pull request closed";
+			return reason.state === "merged" ? t("Pull request merged") : t("Pull request closed");
 		case "idle":
-			return `Idle for ${compactAge(reason.since, now)}`;
+			return t("Idle for {0}", compactAge(reason.since, now));
 	}
 }
 

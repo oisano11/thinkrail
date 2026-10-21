@@ -1,6 +1,7 @@
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
+import { t } from "@/i18n";
 import { AttentionLine } from "./AttentionLine";
 import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
 import { useChatActions } from "./ChatActions";
@@ -9,7 +10,7 @@ import type { ExtUiDialogRequest } from "./types";
 
 export type ExtUiReply = (value: string | boolean | null) => void;
 
-export const EXT_UI_CANCEL_HINT = "Sending a chat message cancels this request.";
+export const EXT_UI_CANCEL_HINT = t(t("Sending a chat message cancels this request."));
 
 const ACTIONS_ROW = "flex flex-wrap items-center gap-4 @max-md:flex-col @max-md:items-stretch";
 const OPTION_BUTTON =
@@ -116,7 +117,7 @@ export function ExtUiPrompt({
 					{toolArgs.length > 0 ? (
 						<ToolArgList
 							data-testid="ext-ui-tool-input"
-							aria-label="Arguments"
+							aria-label={t("Arguments")}
 							tabIndex={0}
 							entries={toolArgs}
 							className="max-h-[40vh] shrink-0 overflow-y-auto rounded-sm bg-container-header-bg px-8 py-4 outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -178,7 +179,7 @@ export function ExtUiPrompt({
 							onClick={cancel}
 							className={OPTION_BUTTON}
 						>
-							Cancel
+							{t("Cancel")}
 						</Button>
 						<Button
 							size="sm"
@@ -186,7 +187,7 @@ export function ExtUiPrompt({
 							onClick={() => answer(request.kind === "confirm" ? true : text)}
 							className={OPTION_BUTTON}
 						>
-							{request.kind === "confirm" ? "OK" : "Submit"}
+							{request.kind === "confirm" ? t("OK") : t("Submit")}
 						</Button>
 					</div>
 				)}

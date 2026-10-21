@@ -6,6 +6,7 @@ import type {
 	TurnChangeSet,
 } from "@thinkrail/contracts";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
+import { t } from "@/i18n";
 import { tupleKey } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
@@ -41,7 +42,7 @@ function scopeSuffix(scope: GitDiffScope): string {
 		case "commit":
 			return scope.sha.slice(0, 7);
 		case "turn":
-			return `turn ${turnTimeLabel(scope.startedAt)}`;
+			return t("turn {0}", turnTimeLabel(scope.startedAt));
 	}
 }
 
@@ -69,7 +70,7 @@ export function diffTabId(workspaceId: string, scope: GitDiffScope, path: string
 export function diffTabName(scope: GitDiffScope, path: string): string {
 	const { base } = splitPath(path);
 	const suffix = scopeSuffix(scope);
-	return suffix ? `${base} · ${suffix}` : base;
+	return suffix ? t("{0} · {1}", base, suffix) : base;
 }
 
 export function changesTabId(workspaceId: string, scope: GitDiffScope): string {
@@ -78,7 +79,7 @@ export function changesTabId(workspaceId: string, scope: GitDiffScope): string {
 
 export function changesTabName(scope: GitDiffScope): string {
 	const suffix = scopeSuffix(scope);
-	return suffix ? `Changes · ${suffix}` : "Changes";
+	return suffix ? t("Changes · {0}", suffix) : t("Changes");
 }
 
 const GENERATED_PATH =
@@ -116,14 +117,14 @@ export function scopeLabel(
 	commits: readonly GitCommit[] = [],
 	turns: readonly TurnChangeSet[] = [],
 ): string {
-	if (scope.kind === "branch") return "All changes";
-	if (scope.kind === "uncommitted") return "Uncommitted";
+	if (scope.kind === "branch") return t("All changes");
+	if (scope.kind === "uncommitted") return t("Uncommitted");
 	if (scope.kind === "pinned") return scope.baseRef.slice(0, 7);
 	if (scope.kind === "turn") {
 		const latest = turns.at(-1);
 		return latest && latest.id === scope.id
-			? "Last turn"
-			: `Turn ${turnTimeLabel(scope.startedAt)}`;
+			? t("Last turn")
+			: t("Turn {0}", turnTimeLabel(scope.startedAt));
 	}
 	const known = commits.find((c) => c.sha === scope.sha);
 	return known?.shortSha ?? scope.sha.slice(0, 7);
@@ -136,11 +137,17 @@ export function scopeTitle(
 ): string {
 	if (scope.kind === "turn") {
 		const files = turns.find((turn) => turn.id === scope.id)?.changes.length;
-		return `Agent turn at ${turnTimeLabel(scope.startedAt)}${files === undefined ? "" : ` · ${files} ${files === 1 ? "file" : "files"}`}`;
+		return t(
+			"Agent turn at {0}{1}",
+			turnTimeLabel(scope.startedAt),
+			files === undefined ? "" : ` · ${files} ${files === 1 ? "file" : "files"}`,
+		);
 	}
-	if (scope.kind !== "commit") return `Diff scope: ${scopeLabel(scope)}`;
+	if (scope.kind !== "commit") return t("Diff scope: {0}", scopeLabel(scope));
 	const known = commits.find((c) => c.sha === scope.sha);
-	return known?.subject ? `${known.shortSha} · ${known.subject}` : scopeLabel(scope, commits);
+	return known?.subject
+		? t("{0} · {1}", known.shortSha, known.subject)
+		: scopeLabel(scope, commits);
 }
 
 export function splitPath(path: string): { dir: string; base: string } {

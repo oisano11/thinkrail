@@ -4,6 +4,7 @@ import type {
 	ProjectTrustSummary,
 	WsParams,
 } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 
 export type ProjectTrustNotice =
 	| { kind: "hidden" }
@@ -43,8 +44,6 @@ export function deriveProjectTrustNotice(
 	return { kind: "trusted", aliasSkills: summary.aliasSkills.length };
 }
 
-const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
-
 const LOADED_KINDS: ReadonlyArray<[ProjectResourceKind, string]> = [
 	["skills", "skills"],
 	["prompts", "prompts"],
@@ -57,25 +56,33 @@ const CODE_KINDS: ReadonlyArray<[ProjectResourceKind, string]> = [
 	["settings", "settings"],
 ];
 
+// The word lists are localised individually and re-joined with a localised
+// separator, because English "a, b and c" has no single Chinese equivalent.
 function namesOf(
 	kinds: ReadonlyArray<[ProjectResourceKind, string]>,
 	present: ReadonlySet<ProjectResourceKind>,
 ): string {
-	const words = kinds.filter(([kind]) => present.has(kind)).map(([, word]) => word);
-	return words.length < 2
-		? (words[0] ?? "")
-		: `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+	const words = kinds.filter(([kind]) => present.has(kind)).map(([, word]) => t(word));
+	const [last, ...rest] = words.slice().reverse();
+	if (last === undefined) return "";
+	if (rest.length === 0) return last;
+	return t("{0} and {1}", rest.reverse().join(t(", ")), last);
 }
 
 export function untrustedNoticeText(
 	notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>,
 ): string {
 	const parts = [
-		...(notice.aliasSkills > 0 ? [plural(notice.aliasSkills, "skill")] : []),
-		...(notice.piResources.length > 0 ? ["its own Pi resources"] : []),
-		...(notice.mcpServers > 0 ? [plural(notice.mcpServers, "MCP server")] : []),
+		...(notice.aliasSkills > 0
+			? [t(notice.aliasSkills === 1 ? "1 skill" : "{0} skills", notice.aliasSkills)]
+			: []),
+		...(notice.piResources.length > 0 ? [t("its own Pi resources")] : []),
+		...(notice.mcpServers > 0
+			? [t(notice.mcpServers === 1 ? "1 MCP server" : "{0} MCP servers", notice.mcpServers)]
+			: []),
 	];
-	return `This project ships ${parts.join(" and ")} — off until you trust it.`;
+	if (parts.length === 0) return "";
+	return t("This project ships {0} — off until you trust it.", parts.join(t(" and ")));
 }
 
 export function trustEnablesText(
@@ -84,17 +91,22 @@ export function trustEnablesText(
 	const present = new Set(notice.piResources);
 	const loads = namesOf(LOADED_KINDS, present);
 	const runs = namesOf(CODE_KINDS, present);
-	const code = `${runs} run code on this machine`;
+	const code = runs ? t("{0} run code on this machine", runs) : "";
 	const enables = !runs
 		? loads
-			? `Trust loads its ${loads}.`
+			? t("Trust loads its {0}.", loads)
 			: null
 		: loads
-			? `Trust loads its ${loads}, and lets its ${code}.`
-			: `Trust lets its ${code}.`;
+			? t("Trust loads its {0}, and lets its {1}.", loads, code)
+			: t("Trust lets its {0}.", code);
 	if (notice.mcpServers === 0) return enables;
-	const mcp = `Its ${plural(notice.mcpServers, "MCP server")} still need${notice.mcpServers === 1 ? "s" : ""} your approval one by one.`;
-	return enables ? `${enables} ${mcp}` : mcp;
+	const mcp = t(
+		notice.mcpServers === 1
+			? "Its 1 MCP server still needs your approval one by one."
+			: "Its {0} MCP servers still need your approval one by one.",
+		notice.mcpServers === 1 ? undefined : notice.mcpServers,
+	);
+	return enables ? t("{0} {1}", enables, mcp) : mcp;
 }
 
 export function trustGrantParams(
@@ -112,8 +124,11 @@ export function trustedNoticeText(
 	notice: Extract<ProjectTrustNotice, { kind: "trusted" }>,
 ): string {
 	return notice.aliasSkills > 0
-		? `${plural(notice.aliasSkills, "project skill")} trusted.`
-		: "Project resources trusted.";
+		? t(
+				notice.aliasSkills === 1 ? "1 project skill trusted." : "{0} project skills trusted.",
+				notice.aliasSkills === 1 ? undefined : notice.aliasSkills,
+			)
+		: t("Project resources trusted.");
 }
 
 export function canStopTrusting(project: TrustRecord | undefined): boolean {
@@ -125,6 +140,8 @@ export function stopTrustingText(
 	supportsProjectTrust: boolean,
 ): string {
 	return supportsProjectTrust && project?.piResourceTrust === "granted"
-		? "Its project skills, Pi resources and MCP servers stop loading; running subagents stop and open chats reload when idle."
-		: "Its project skills stop loading in new chats.";
+		? t(
+				"Its project skills, Pi resources and MCP servers stop loading; running subagents stop and open chats reload when idle.",
+			)
+		: t("Its project skills stop loading in new chats.");
 }

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { t } from "../../i18n";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
@@ -42,11 +43,11 @@ export default function HtmlDiff({
 			originalText === null ? null : (
 				<HtmlSide
 					text={originalText}
-					title={`Original preview of ${originalResource.path}`}
+					title={t("Original preview of {0}", originalResource.path)}
 					viewport={viewport}
 				/>
 			),
-		caption: originalText === null ? "Old: No document" : "Old document",
+		caption: originalText === null ? t("Old: No document") : t("Old document"),
 		intrinsicSize: null,
 	};
 	const modifiedSide: VisualDiffSide = {
@@ -55,11 +56,11 @@ export default function HtmlDiff({
 			modifiedText === null ? null : (
 				<HtmlSide
 					text={modifiedText}
-					title={`Modified preview of ${resource.path}`}
+					title={t("Modified preview of {0}", resource.path)}
 					viewport={viewport}
 				/>
 			),
-		caption: modifiedText === null ? "New: No document" : "New document",
+		caption: modifiedText === null ? t("New: No document") : t("New document"),
 		intrinsicSize: null,
 	};
 	return (
@@ -75,7 +76,7 @@ export default function HtmlDiff({
 					contentStamp={diffContentStamp(original, modified)}
 					initialMode="2-up"
 					modes={["2-up"]}
-					emptyLabel="No document"
+					emptyLabel={t("No document")}
 				/>
 			</div>
 		</div>

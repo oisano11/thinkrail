@@ -16,6 +16,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { t } from "@/i18n";
 import { prepareChatTitle } from "../chat/chatTitle";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -109,7 +110,11 @@ const NO_EDITOR_TABS: EditorTab[] = [];
 
 function MissingResource({ label }: { label: string }) {
 	return (
-		<LoadingRegion rows={12} label={`Restoring ${label}`} className="h-full overflow-hidden p-16" />
+		<LoadingRegion
+			rows={12}
+			label={t("Restoring {0}", label)}
+			className="h-full overflow-hidden p-16"
+		/>
 	);
 }
 
@@ -141,13 +146,13 @@ function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: Ed
 	if (!editor) {
 		return (
 			<MissingResource
-				label={tab.kind === "file" ? "file" : tab.kind === "changes" ? "changes" : "diff"}
+				label={tab.kind === "file" ? t("file") : tab.kind === "changes" ? t("changes") : t("diff")}
 			/>
 		);
 	}
 	return (
-		<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
-			<Suspense fallback={<MissingResource label="editor" />}>
+		<ErrorBoundary label={t("editor")} resetKeys={[workspaceId, tab.id]}>
+			<Suspense fallback={<MissingResource label={t("editor")} />}>
 				{editor.kind === "file" ? (
 					<FilePane tab={editor} />
 				) : editor.kind === "diff" ? (
@@ -181,8 +186,8 @@ function ChatResourceBody({
 	}, [available, tab.sessionId]);
 	if (available) {
 		return (
-			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
-				<Suspense fallback={<MissingResource label="chat" />}>
+			<ErrorBoundary label={t("chat")} resetKeys={[workspaceId, tab.id]}>
+				<Suspense fallback={<MissingResource label={t("chat")} />}>
 					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
 				</Suspense>
 			</ErrorBoundary>
@@ -198,7 +203,7 @@ function ChatResourceBody({
 					!state.removedWorkspaceIds[workspaceId] &&
 					!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
 				) {
-					toast.error("The chat could not be restored.", "Couldn't restore the chat");
+					toast.error(t("The chat could not be restored."), t("Couldn't restore the chat"));
 				}
 			})
 			.catch((error) => {
@@ -208,20 +213,20 @@ function ChatResourceBody({
 					!state.removedWorkspaceIds[workspaceId] &&
 					!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
 				) {
-					toast.error(errorText(error), "Couldn't restore the chat");
+					toast.error(errorText(error), t("Couldn't restore the chat"));
 				}
 			});
 	};
-	if (!stalled) return <MissingResource label="chat" />;
+	if (!stalled) return <MissingResource label={t("chat")} />;
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
-			<span className="tr-text-ui">The chat is taking longer than usual to restore.</span>
+			<span className="tr-text-ui">{t("The chat is taking longer than usual to restore.")}</span>
 			<button
 				type="button"
 				onClick={retry}
 				className="rounded-sm border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
 			>
-				Retry
+				{t("Retry")}
 			</button>
 		</div>
 	);
@@ -275,7 +280,7 @@ function useTerminalReservation(workspaceId: string): void {
 				);
 				if (!stillPending) return;
 				state.rejectTerminalReservation(workspaceId, pendingIntent.tabKey);
-				toast.error(errorText(error), "Couldn't create the terminal");
+				toast.error(errorText(error), t("Couldn't create the terminal"));
 			});
 		return () => {
 			current = false;
@@ -320,7 +325,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if ("reason" in prepared || prepared.title === currentTitle) return;
 			void getTransport()
 				.request("session.rename", { workspaceId, sessionId, title: prepared.title })
-				.catch((error) => toast.error(errorText(error), "Couldn't rename the chat"));
+				.catch((error) => toast.error(errorText(error), t("Couldn't rename the chat")));
 		},
 		[workspaceId],
 	);
@@ -539,10 +544,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
 			}
 			if (tab.kind === "document") {
-				if (deletedSessions?.[tab.sourceId]) return <MissingResource label="plan" />;
+				if (deletedSessions?.[tab.sourceId]) return <MissingResource label={t("plan")} />;
 				return (
-					<ErrorBoundary label="plan" resetKeys={[workspaceId, tab.id]}>
-						<Suspense fallback={<MissingResource label="plan" />}>
+					<ErrorBoundary label={t("plan")} resetKeys={[workspaceId, tab.id]}>
+						<Suspense fallback={<MissingResource label={t("plan")} />}>
 							<PlanPane workspaceId={workspaceId} sessionId={tab.sourceId} />
 						</Suspense>
 					</ErrorBoundary>
@@ -552,7 +557,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				const terminal = terminalByKey.get(tab.tabKey);
 				const location = document ? findTabLocation(document, tab.id) : null;
 				return (
-					<ErrorBoundary label="terminal" resetKeys={[workspaceId, tab.id]}>
+					<ErrorBoundary label={t("terminal")} resetKeys={[workspaceId, tab.id]}>
 						{terminal ? (
 							<TerminalWorkbenchBody
 								tab={terminal}
@@ -563,7 +568,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								}
 							/>
 						) : (
-							<MissingResource label="terminal" />
+							<MissingResource label={t("terminal")} />
 						)}
 					</ErrorBoundary>
 				);
@@ -603,8 +608,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			changes: <ChangesPanel key={workspaceId} workspaceId={workspaceId} />,
 			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
 			plan: railPlanSessionId ? (
-				<ErrorBoundary label="plan rail" resetKeys={[workspaceId, railPlanSessionId]}>
-					<Suspense fallback={<MissingResource label="plan" />}>
+				<ErrorBoundary label={t("plan rail")} resetKeys={[workspaceId, railPlanSessionId]}>
+					<Suspense fallback={<MissingResource label={t("plan")} />}>
 						<PlanRailPane workspaceId={workspaceId} sessionId={railPlanSessionId} />
 					</Suspense>
 				</ErrorBoundary>
@@ -613,13 +618,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					data-testid="plan-rail-empty"
 					className="flex h-full items-center justify-center p-16 text-text-subtle tr-text-ui"
 				>
-					Open a chat to see its plan here.
+					{t("Open a chat to see its plan here.")}
 				</div>
 			),
 		};
 		for (const tool of Object.keys(bodies) as LayoutToolId[]) {
 			bodies[tool] = (
-				<ErrorBoundary label={`${tool} tool`} resetKeys={[workspaceId, tool]}>
+				<ErrorBoundary label={t("{0} tool", tool)} resetKeys={[workspaceId, tool]}>
 					{bodies[tool]}
 				</ErrorBoundary>
 			);
@@ -665,7 +670,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							: "shrink-0 tr-text-eyebrow text-text-subtle"
 					}
 				>
-					Review
+					{t("Review")}
 				</span>
 			) : null;
 		},
@@ -679,7 +684,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				className="flex h-full flex-col items-center justify-center gap-4 px-16 text-center"
 			>
 				<span className="tr-text-eyebrow text-text-muted">
-					{isDefault ? "Default workspace" : isExternal ? "Existing worktree" : "Workspace ready"}
+					{isDefault
+						? t("Default workspace")
+						: isExternal
+							? t("Existing worktree")
+							: t("Workspace ready")}
 				</span>
 				{workspace ? (
 					<>
@@ -689,11 +698,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						<p className="flex max-w-full items-center gap-4 tr-text-metadata text-text-muted">
 							<GitBranch className="size-14 shrink-0" />
 							{isDefault || isExternal ? (
-								<span className="truncate">on {workspace.branch}</span>
+								<span className="truncate">{t("on {0}", workspace.branch)}</span>
 							) : (
 								<>
 									<span className="truncate">{workspace.branch}</span>
-									<span className="shrink-0 text-text-muted">· from {workspace.baseBranch}</span>
+									<span className="shrink-0 text-text-muted">
+										{t("· from {0}", workspace.baseBranch)}
+									</span>
 								</>
 							)}
 						</p>
@@ -701,8 +712,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				) : null}
 				<p className="mt-4 tr-text-ui text-text-muted">
 					{isDefault
-						? "Chats, changes, and terminals run directly in your project folder."
-						: "Files, chats, changes, and terminals are scoped to this workspace."}
+						? t("Chats, changes, and terminals run directly in your project folder.")
+						: t("Files, chats, changes, and terminals are scoped to this workspace.")}
 				</p>
 				<button
 					type="button"
@@ -714,11 +725,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				>
 					{chatStarting ? (
 						<>
-							<Loader2 className="size-14 animate-spin motion-reduce:animate-none" /> Starting chat…
+							<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />{" "}
+							{t("Starting chat…")}
 						</>
 					) : (
 						<>
-							<MessageSquarePlus className="size-14" /> New chat
+							<MessageSquarePlus className="size-14" /> {t("New chat")}
 						</>
 					)}
 				</button>
@@ -736,11 +748,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					targetGroupId={groupId}
 					{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				/>
-				<IconTooltip label="New terminal in this group">
+				<IconTooltip label={t("New terminal in this group")}>
 					<button
 						type="button"
 						data-testid="new-terminal"
-						aria-label="New terminal in this group"
+						aria-label={t("New terminal in this group")}
 						onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
 						className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
@@ -755,7 +767,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	if (!rendered) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
-				Restoring workspace layout…
+				{t("Restoring workspace layout…")}
 			</div>
 		);
 	}
@@ -872,7 +884,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							options?.newPaneBelow === true,
 						)
 				}
-				onGestureCanceled={() => toast.info("The layout changed. Your drag was canceled.")}
+				onGestureCanceled={() => toast.info(t("The layout changed. Your drag was canceled."))}
 			/>
 			{terminalClose.confirmation}
 		</div>

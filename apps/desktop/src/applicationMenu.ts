@@ -18,15 +18,15 @@ function editMenu(locale: MenuLocale): ApplicationMenuItemConfig {
 	return {
 		label: menuLabel(locale, "Edit"),
 		submenu: [
-			{ role: "undo" },
-			{ role: "redo" },
+			{ role: "undo", label: menuLabel(locale, "Undo") },
+			{ role: "redo", label: menuLabel(locale, "Redo") },
 			{ type: "separator" },
-			{ role: "cut" },
-			{ role: "copy" },
-			{ role: "paste" },
-			{ role: "pasteAndMatchStyle" },
-			{ role: "delete" },
-			{ role: "selectAll" },
+			{ role: "cut", label: menuLabel(locale, "Cut") },
+			{ role: "copy", label: menuLabel(locale, "Copy") },
+			{ role: "paste", label: menuLabel(locale, "Paste") },
+			{ role: "pasteAndMatchStyle", label: menuLabel(locale, "Paste and Match Style") },
+			{ role: "delete", label: menuLabel(locale, "Delete") },
+			{ role: "selectAll", label: menuLabel(locale, "Select All") },
 		],
 	};
 }
@@ -40,7 +40,7 @@ export function desktopApplicationMenu(
 	return [
 		{
 			submenu: [
-				{ role: "about" },
+				{ role: "about", label: menuLabel(locale, "About") },
 				{ type: "separator" },
 				{
 					label: menuLabel(locale, "Settings…"),
@@ -48,9 +48,13 @@ export function desktopApplicationMenu(
 					accelerator: "CommandOrControl+,",
 				},
 				{ type: "separator" },
-				{ role: "hide", accelerator: "CommandOrControl+H" },
-				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
-				{ role: "showAll" },
+				{ role: "hide", label: menuLabel(locale, "Hide"), accelerator: "CommandOrControl+H" },
+				{
+					role: "hideOthers",
+					label: menuLabel(locale, "Hide Others"),
+					accelerator: "CommandOrControl+Alt+H",
+				},
+				{ role: "showAll", label: menuLabel(locale, "Show All") },
 				{ type: "separator" },
 				{
 					label: menuLabel(locale, "Quit", ["ThinkRail"]),
@@ -63,15 +67,19 @@ export function desktopApplicationMenu(
 		{
 			label: menuLabel(locale, "Window"),
 			submenu: [
-				{ role: "minimize", accelerator: "CommandOrControl+M" },
-				{ role: "zoom" },
+				{
+					role: "minimize",
+					label: menuLabel(locale, "Minimize"),
+					accelerator: "CommandOrControl+M",
+				},
+				{ role: "zoom", label: menuLabel(locale, "Zoom") },
 				{
 					label: menuLabel(locale, "Close"),
 					action: CLOSE_ITEM_COMMAND,
 					accelerator: "CommandOrControl+W",
 				},
 				{ type: "separator" },
-				{ role: "bringAllToFront" },
+				{ role: "bringAllToFront", label: menuLabel(locale, "Bring All to Front") },
 			],
 		},
 	];

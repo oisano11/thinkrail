@@ -11,15 +11,15 @@ import {
 const editMenu: ApplicationMenuItemConfig = {
 	label: "Edit",
 	submenu: [
-		{ role: "undo" },
-		{ role: "redo" },
+		{ role: "undo", label: "Undo" },
+		{ role: "redo", label: "Redo" },
 		{ type: "separator" },
-		{ role: "cut" },
-		{ role: "copy" },
-		{ role: "paste" },
-		{ role: "pasteAndMatchStyle" },
-		{ role: "delete" },
-		{ role: "selectAll" },
+		{ role: "cut", label: "Cut" },
+		{ role: "copy", label: "Copy" },
+		{ role: "paste", label: "Paste" },
+		{ role: "pasteAndMatchStyle", label: "Paste and Match Style" },
+		{ role: "delete", label: "Delete" },
+		{ role: "selectAll", label: "Select All" },
 	],
 };
 
@@ -27,13 +27,17 @@ test("builds the native macOS application, edit, and window menus", () => {
 	expect(desktopApplicationMenu("darwin")).toEqual([
 		{
 			submenu: [
-				{ role: "about" },
+				{ role: "about", label: "About ThinkRail" },
 				{ type: "separator" },
 				{ label: "Settings…", action: "open-settings", accelerator: "CommandOrControl+," },
 				{ type: "separator" },
-				{ role: "hide", accelerator: "CommandOrControl+H" },
-				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
-				{ role: "showAll" },
+				{ role: "hide", label: "Hide ThinkRail", accelerator: "CommandOrControl+H" },
+				{
+					role: "hideOthers",
+					label: "Hide Others",
+					accelerator: "CommandOrControl+Alt+H",
+				},
+				{ role: "showAll", label: "Show All" },
 				{ type: "separator" },
 				{
 					label: "Quit ThinkRail",
@@ -46,11 +50,11 @@ test("builds the native macOS application, edit, and window menus", () => {
 		{
 			label: "Window",
 			submenu: [
-				{ role: "minimize", accelerator: "CommandOrControl+M" },
-				{ role: "zoom" },
+				{ role: "minimize", label: "Minimize", accelerator: "CommandOrControl+M" },
+				{ role: "zoom", label: "Zoom" },
 				{ label: "Close", action: "close-item", accelerator: "CommandOrControl+W" },
 				{ type: "separator" },
-				{ role: "bringAllToFront" },
+				{ role: "bringAllToFront", label: "Bring All to Front" },
 			],
 		},
 	]);

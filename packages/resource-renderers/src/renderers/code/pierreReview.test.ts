@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { parseDiffFromFile } from "@pierre/diffs";
 import type { ReviewThread, SurfaceReview } from "../../registry";
 import {
-	CROSS_SIDE_MESSAGE,
+	crossSideMessage,
 	diffPlacedThreadIds,
 	filePlacedThreadIds,
 	renderedDiffLineNumbers,
@@ -83,7 +83,7 @@ test("a one-sided selection opens a composer on that side; a cross-side selectio
 		id: 3,
 		side: "additions",
 		lineNumber: 9,
-		message: CROSS_SIDE_MESSAGE,
+		message: crossSideMessage(),
 	});
 });
 

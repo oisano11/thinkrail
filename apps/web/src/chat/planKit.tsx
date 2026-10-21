@@ -5,6 +5,7 @@ import {
 	RiRecordCircleLine as CircleDot,
 	RiShieldCheckLine as ShieldCheck,
 } from "@remixicon/react";
+import { t } from "@/i18n";
 import { Markdown } from "./Markdown";
 import { verificationStatus } from "./planView";
 
@@ -51,8 +52,8 @@ export function VerificationBadge({ verification }: { verification: string }) {
 			data-status={status}
 			title={
 				status === "claimed"
-					? "Verification as reported by the agent — not re-run by the host"
-					: "The agent reports this step was not verified"
+					? t("Verification as reported by the agent — not re-run by the host")
+					: t("The agent reports this step was not verified")
 			}
 			className="flex min-w-0 items-start gap-4 tr-text-metadata"
 		>

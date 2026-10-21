@@ -1,6 +1,7 @@
 import type { FileNode } from "@thinkrail/contracts";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useRef, useState } from "react";
+import { t } from "@/i18n";
 import type { TabIntent } from "../store";
 import { getTransport } from "../transport";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
@@ -37,7 +38,7 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 
 	if (nodes === null) return <LoadingRegion rows={8} className="px-4 py-4" />;
 	if (nodes.length === 0)
-		return <p className="px-4 py-4 tr-text-metadata text-text-muted">Empty</p>;
+		return <p className="px-4 py-4 tr-text-metadata text-text-muted">{t("Empty")}</p>;
 	return (
 		<ul className="flex flex-col motion-safe:animate-reveal">
 			{nodes.map((node) => (

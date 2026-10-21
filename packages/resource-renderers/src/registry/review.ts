@@ -1,4 +1,5 @@
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { t } from "../i18n";
 import type { ResourceIntent, ResourceRenderer, ReviewThread } from "./types";
 
 export function anchorLabel(
@@ -9,12 +10,12 @@ export function anchorLabel(
 	if (structural?.kind === "structural") {
 		if (structural.scheme === "table-cell") {
 			const cell = /^(\d+):(\d+)$/.exec(structural.ref);
-			if (cell) return `R${cell[1]}C${cell[2]}`;
+			if (cell) return t("R{0}C{1}", cell[1], cell[2]);
 		}
 		if (structural.scheme === "json-pointer") return structural.ref;
 		if (structural.scheme === "ipynb-cell") {
 			const index = /^index:(\d+)$/.exec(structural.ref);
-			if (index) return `cell ${Number(index[1]) + 1}`;
+			if (index) return t("cell {0}", Number(index[1]) + 1);
 			const ordinal = ipynbCellOrdinals?.get(structural.ref);
 			return `cell ${ordinal ?? structural.ref}`;
 		}
@@ -28,7 +29,7 @@ export function anchorLabel(
 	}
 	const region = anchor.selectors.find((selector) => selector.kind === "region");
 	if (region?.kind === "region") {
-		return region.page === undefined ? "region" : `p${region.page} region`;
+		return region.page === undefined ? t("region") : t("p{0} region", region.page);
 	}
 	return "file";
 }
@@ -49,19 +50,25 @@ export function isPlaceable(
 	});
 }
 
-export function threadLabel(t: Pick<ReviewThread, "status" | "anchorState" | "stale">): string {
-	if (t.stale) return `${t.status} · stale`;
-	if (t.anchorState === "outdated") return `${t.status} · outdated`;
-	return t.status;
+export function threadLabel(
+	thread: Pick<ReviewThread, "status" | "anchorState" | "stale">,
+): string {
+	if (thread.stale) return t("{0} · stale", thread.status);
+	if (thread.anchorState === "outdated") return t("{0} · outdated", thread.status);
+	return thread.status;
 }
 
 export function outdatedReason(anchor: ReviewAnchor | null | undefined): string {
 	const kinds = new Set((anchor?.selectors ?? []).map((selector) => selector.kind));
 	if (kinds.has("textQuote")) {
-		return "The file changed or is gone, and this comment's text was not found again; it keeps its original snapshot.";
+		return t(
+			"The file changed or is gone, and this comment's text was not found again; it keeps its original snapshot.",
+		);
 	}
 	if (kinds.has("region") || kinds.has("structural") || kinds.has("lineRange")) {
-		return "The file's bytes changed or it is gone; a position in an image, PDF or notebook cannot be re-verified, so the comment keeps its original snapshot.";
+		return t(
+			"The file's bytes changed or it is gone; a position in an image, PDF or notebook cannot be re-verified, so the comment keeps its original snapshot.",
+		);
 	}
-	return "The file this comment was about is gone.";
+	return t("The file this comment was about is gone.");
 }

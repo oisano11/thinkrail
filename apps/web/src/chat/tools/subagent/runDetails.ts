@@ -1,6 +1,7 @@
 import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
 import { isDelegationRunDetails } from "@thinkrail/contracts";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { t } from "@/i18n";
 import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
 
 export function readRunDetails(value: unknown): DelegationRunDetails | undefined {
@@ -19,7 +20,7 @@ export function usageCounters(
 ): string[] {
 	const parts: string[] = [];
 	const u = details.usage;
-	if (u.turns > 0) parts.push(`${u.turns} ${u.turns === 1 ? "turn" : "turns"}`);
+	if (u.turns > 0) parts.push(u.turns === 1 ? t("1 turn") : t("{0} turns", u.turns));
 	if (u.input > 0 || u.output > 0) {
 		parts.push(
 			tokens === "split"

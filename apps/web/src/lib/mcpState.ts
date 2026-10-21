@@ -1,5 +1,7 @@
 import type { McpServerState } from "@thinkrail/contracts";
 
+import { t } from "@/i18n";
+
 export type McpStateTone = "success" | "working" | "warning" | "error" | "info" | "neutral";
 
 export const MCP_STATE_LABEL: Readonly<Record<McpServerState, string>> = {
@@ -49,11 +51,11 @@ export function isMcpActiveState(state: McpServerState): boolean {
 }
 
 export function mcpToolCountLabel(count: number): string {
-	return `${count} tool${count === 1 ? "" : "s"}`;
+	return count === 1 ? t("1 tool") : t("{0} tools", count);
 }
 
 export function mcpStatusLabel(state: McpServerState, toolCount?: number): string {
 	return state === "connected" && toolCount !== undefined
-		? `${MCP_STATE_LABEL.connected} · ${mcpToolCountLabel(toolCount)}`
-		: MCP_STATE_LABEL[state];
+		? t("{0} · {1}", t(MCP_STATE_LABEL.connected), mcpToolCountLabel(toolCount))
+		: t(MCP_STATE_LABEL[state]);
 }

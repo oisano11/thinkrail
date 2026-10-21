@@ -108,6 +108,7 @@ function snapshotOf(state: ReadingBandState): ReadingBandSnapshot {
 		following: state.following,
 		moving: state.moving,
 		runway: state.runway,
+		// English source copy: the transcript translates it where the button is rendered.
 		buttonLabel: state.following ? null : state.streaming ? "Follow response" : "Latest",
 	};
 }

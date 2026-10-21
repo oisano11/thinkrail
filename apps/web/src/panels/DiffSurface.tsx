@@ -18,6 +18,7 @@ import {
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Suspense, useCallback, useMemo } from "react";
+import { t } from "@/i18n";
 import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
@@ -46,7 +47,7 @@ export interface DiffSurfaceInput {
 }
 
 function fileRevertMessage(receipt: ChangeReceipt, base: string): string {
-	return receipt.trashed ? `Moved ${base} to the trash` : `Reverted ${base}`;
+	return receipt.trashed ? t("Moved {0} to the trash", base) : t("Reverted {0}", base);
 }
 
 export interface DiffSurface {
@@ -128,12 +129,12 @@ export function useDiffSurface({
 			const code = wsErrorCode(error);
 			if (code === "STALE_VIEW") {
 				reload();
-				toast.info("This file changed since you opened it — review the new diff");
+				toast.info(t("This file changed since you opened it — review the new diff"));
 				return;
 			}
 			if (code === "RECEIPT_UNKNOWN") {
 				reload();
-				toast.info("This change can no longer be undone — the host no longer holds it");
+				toast.info(t("This change can no longer be undone — the host no longer holds it"));
 				return;
 			}
 			toast.error(errorText(error), title);
@@ -149,7 +150,7 @@ export function useDiffSurface({
 					expect: { modifiedHash: receipt.after.hash },
 				});
 			} catch (error) {
-				handleMutationError(error, "Couldn't undo the revert");
+				handleMutationError(error, t("Couldn't undo the revert"));
 			}
 		},
 		[handleMutationError, workspaceId],
@@ -161,7 +162,7 @@ export function useDiffSurface({
 				message,
 				durationMs: 8000,
 				action: {
-					label: "Undo",
+					label: t("Undo"),
 					onClick: () => {
 						void undoReceipt(receipt);
 					},
@@ -173,7 +174,10 @@ export function useDiffSurface({
 	const revertBlock = useCallback<HunkActions["revert"]>(
 		async (block) => {
 			if (!mutationExpect) {
-				handleMutationError(new Error("Change metadata is not ready"), "Couldn't revert the hunk");
+				handleMutationError(
+					new Error(t("Change metadata is not ready")),
+					t("Couldn't revert the hunk"),
+				);
 				return;
 			}
 			try {
@@ -184,16 +188,19 @@ export function useDiffSurface({
 					target: { kind: "range", original: block.original, modified: block.modified },
 					expect: mutationExpect,
 				});
-				showUndoToast(receipt, `Reverted hunk in ${base}`);
+				showUndoToast(receipt, t("Reverted hunk in {0}", base));
 			} catch (error) {
-				handleMutationError(error, "Couldn't revert the hunk");
+				handleMutationError(error, t("Couldn't revert the hunk"));
 			}
 		},
 		[base, handleMutationError, mutationExpect, showUndoToast, path, scope, workspaceId],
 	);
 	const revertFile = useCallback(async () => {
 		if (!mutationExpect) {
-			handleMutationError(new Error("Change metadata is not ready"), "Couldn't revert the file");
+			handleMutationError(
+				new Error(t("Change metadata is not ready")),
+				t("Couldn't revert the file"),
+			);
 			return;
 		}
 		try {
@@ -206,7 +213,7 @@ export function useDiffSurface({
 			});
 			showUndoToast(receipt, fileRevertMessage(receipt, base));
 		} catch (error) {
-			handleMutationError(error, "Couldn't revert the file");
+			handleMutationError(error, t("Couldn't revert the file"));
 		}
 	}, [base, handleMutationError, mutationExpect, showUndoToast, path, scope, workspaceId]);
 	const askAgent = useCallback<HunkActions["askAgent"]>(
@@ -300,7 +307,7 @@ export function DiffSurfaceBody({
 									data-testid="diff-open-file"
 									onClick={() => void openFileInTab(workspaceId, path, "keep")}
 								>
-									Open file
+									{t("Open file")}
 								</Button>
 							) : null
 						}

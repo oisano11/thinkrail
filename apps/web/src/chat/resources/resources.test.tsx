@@ -68,7 +68,7 @@ test("resource primitives keep their props-only import boundary", () => {
 		const source = readFileSync(`${import.meta.dir}/${file}`, "utf8");
 		for (const [, dependency] of source.matchAll(/from\s+["']([^"']+)["']/g)) {
 			expect(dependency).toMatch(
-				/^(?:@thinkrail\/contracts|react|@remixicon\/react|@thinkrail\/ui\/|@\/lib$|\.\/)/,
+				/^(?:@thinkrail\/contracts|react|@remixicon\/react|@thinkrail\/ui\/|@\/lib$|@\/i18n$|\.\/)/,
 			);
 		}
 		expect(source).not.toMatch(
@@ -405,7 +405,7 @@ test("the trigger counts connected MCP servers without breathing, and the attent
 	expect(html).not.toContain("data-live");
 	expect(html).not.toContain("animate-working");
 	expect(html).toContain('data-testid="resources-mcp-attention"');
-	expect(html).toContain('aria-label="2 MCP servers need attention — open MCP settings"');
+	expect(html).toContain('aria-label="2 MCP servers need attention. Open MCP settings."');
 	expect(
 		renderToStaticMarkup(
 			<TooltipProvider>

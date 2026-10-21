@@ -1,4 +1,5 @@
 import { type CSSProperties, useEffect, useMemo } from "react";
+import { t } from "../../i18n";
 import type { ResourceViewProps } from "../../registry";
 import { useElementSize } from "../../support/useElementSize";
 import { RegionReviewSurface } from "../RegionReviewSurface";
@@ -64,11 +65,11 @@ export default function SvgView({
 							}
 						: {})}
 				>
-					<SvgFrame title={`Vector preview of ${resource.path}`} document={document} />
+					<SvgFrame title={t("Vector preview of {0}", resource.path)} document={document} />
 				</RegionReviewSurface>
 			</div>
 			<div className="shrink-0 border-border-default border-t bg-container-header-bg px-12 py-4 tr-text-metadata text-text-muted">
-				{size ? `${size.width} × ${size.height}` : "Flexible size"} · {svgByteLength(text)} B
+				{size ? `${size.width} × ${size.height}` : t("Flexible size")} · {svgByteLength(text)} B
 			</div>
 		</div>
 	);

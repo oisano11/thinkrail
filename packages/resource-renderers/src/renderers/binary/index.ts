@@ -1,8 +1,11 @@
+import { t } from "../../i18n";
 import type { ResourceRenderer } from "../../registry";
 
 export const binaryRenderer: ResourceRenderer = {
 	id: "thinkrail/binary",
-	label: "File",
+	get label() {
+		return t("File");
+	},
 	match: { text: false },
 	rank: 0,
 	capabilities: {

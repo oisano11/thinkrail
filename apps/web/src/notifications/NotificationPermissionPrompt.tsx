@@ -8,12 +8,16 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { useRef } from "react";
+import { t } from "@/i18n";
 import { toast, useAppStore } from "@/store";
 import { selectNotificationChannel } from "./channel";
 import { snoozePrompt } from "./notificationPrompt";
 
-const DENIED_HINT =
-	"Notifications are blocked for this site. Re-enable them in your browser's site settings, then turn notifications on again.";
+const DENIED_HINT = t(
+	t(
+		"Notifications are blocked for this site. Re-enable them in your browser's site settings, then turn notifications on again.",
+	),
+);
 
 export function NotificationPermissionPrompt() {
 	const open = useAppStore((state) => state.notificationPromptOpen);
@@ -30,7 +34,7 @@ export function NotificationPermissionPrompt() {
 		void selectNotificationChannel()
 			.requestPermission()
 			.then((result) => {
-				if (result === "denied") toast.error(DENIED_HINT, "Notifications blocked");
+				if (result === "denied") toast.error(DENIED_HINT, t("Notifications blocked"));
 			})
 			.finally(() => {
 				pendingRef.current = false;
@@ -45,21 +49,21 @@ export function NotificationPermissionPrompt() {
 				if (!nextOpen) dismiss();
 			}}
 		>
-			<DialogContent data-testid="notification-permission-prompt">
+			<DialogContent closeLabel={t("Close")} data-testid="notification-permission-prompt">
 				<DialogHeader>
-					<DialogTitle>Get notified when a worktree needs you</DialogTitle>
+					<DialogTitle>{t("Get notified when a worktree needs you")}</DialogTitle>
 					<DialogDescription>
-						ThinkRail can notify you when an agent asks a question, finishes, or fails — even when
-						the app is in a background tab. Notifications only appear while this window isn't
-						focused.
+						{t(
+							"ThinkRail can notify you when an agent asks a question, finishes, or fails — even when the app is in a background tab. Notifications only appear while this window isn't focused.",
+						)}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>
 					<Button variant="outline" data-testid="notification-not-now" onClick={dismiss}>
-						Not now
+						{t("Not now")}
 					</Button>
 					<Button data-testid="notification-enable" onClick={enable}>
-						Enable
+						{t("Enable")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

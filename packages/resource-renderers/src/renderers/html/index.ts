@@ -1,8 +1,11 @@
+import { t } from "../../i18n";
 import type { ResourceRenderer } from "../../registry";
 
 export const htmlRenderer: ResourceRenderer = {
 	id: "thinkrail/html",
-	label: "Preview",
+	get label() {
+		return t("Preview");
+	},
 	match: { glob: ["*.html", "*.htm"], text: true },
 	rank: 120,
 	capabilities: {

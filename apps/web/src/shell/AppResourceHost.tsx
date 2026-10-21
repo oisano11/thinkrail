@@ -8,8 +8,10 @@ import {
 	ResourcePreferencesProvider,
 	type ResourceReviewSendProps,
 	registerBundledResourceRenderers,
+	setResourceTranslator,
 } from "@thinkrail/resource-renderers";
 import { type ReactNode, useMemo } from "react";
+import { t } from "@/i18n";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { SHIKI_FILE_LANGUAGES, shikiLanguageId } from "../lib/highlighter";
@@ -21,6 +23,9 @@ import { selectFileChangeSince, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
 
+// The renderer package owns its English copy but not the catalogs, so the translator is installed here
+// before registration: renderer labels are read while registering.
+setResourceTranslator(t);
 registerBundledResourceRenderers();
 
 function FileReview({ workspaceId, path, kind, sessionId, children }: ResourceFileReviewProps) {

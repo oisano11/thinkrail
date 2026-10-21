@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { t } from "@/i18n";
 import type { LayoutAttention } from "../../lib";
 import {
 	type EditorTab,
@@ -353,7 +354,10 @@ export function useLayoutIntentProcessing(
 									!latest.removedWorkspaceIds[workspaceId] &&
 									!latest.deletedSessionsByWorkspace[workspaceId]?.[placed.sessionId]
 								) {
-									toast.error("The chat could not be restored.", "Couldn't open chat history");
+									toast.error(
+										t("The chat could not be restored."),
+										t("Couldn't open chat history"),
+									);
 								}
 								latest.clearHistoryOpen();
 							})
@@ -373,7 +377,7 @@ export function useLayoutIntentProcessing(
 									!latest.removedWorkspaceIds[workspaceId] &&
 									!latest.deletedSessionsByWorkspace[workspaceId]?.[placed.sessionId]
 								) {
-									toast.error(errorText(error), "Couldn't open chat history");
+									toast.error(errorText(error), t("Couldn't open chat history"));
 								}
 								latest.clearHistoryOpen();
 							});

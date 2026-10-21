@@ -13,11 +13,20 @@ import { join } from "node:path";
  *   bun scripts/i18n-keys.ts            # report drift only, exit 1 when stale
  */
 import * as ts from "typescript";
+import { HOST_MESSAGES } from "../src/i18n/hostMessages.generated";
 
 const rootArg = process.argv.indexOf("--root");
 const root = rootArg >= 0 ? (process.argv[rootArg + 1] ?? "src") : "src";
 const shouldWrite = process.argv.includes("--write");
 const OUTPUT = join(root, "i18n", "keys.ts");
+
+/**
+ * The renderer package renders user-visible copy too, and it is translated through the translator the
+ * app installs (`packages/resource-renderers/src/i18n.ts`), so its call sites are part of the same
+ * registry: leaving them out would report full coverage for a locale while whole renderers stayed
+ * English.
+ */
+const PACKAGE_ROOTS = [join(root, "..", "..", "..", "packages", "resource-renderers", "src")];
 
 const SKIP =
 	/(?:^|\/)(?:generated|node_modules|dist|i18n)(?:\/|$)|\.(?:test|spec)\.[cm]?tsx?$|\.d\.ts$/;
@@ -79,7 +88,8 @@ function collectArgument(node: ts.Node | undefined, sf: ts.SourceFile, into: Set
 		return;
 	}
 	const root = rootIdentifier(node);
-	if (root) stringValuesOf(initializerFor(sf, root), into);
+	if (!root) return;
+	stringValuesOf(initializerFor(sf, root) ?? importedInitializer(sf, root), into);
 }
 
 /** The declaration a `t(…)` argument ultimately reads from: `NAME`, `NAME.key`, or `NAME[expr]`. */
@@ -109,7 +119,46 @@ function initializerFor(sf: ts.SourceFile, name: string): ts.Node | undefined {
 	return found;
 }
 
-for (const file of walk(root)) {
+/**
+ * A string table is usually not declared beside its read site: `ModelEffortPicker` renders
+ * `t(LEVEL_HINT[level])` while `LEVEL_HINT` lives in `modelPicker.ts`. Resolving only the declaring file
+ * left every imported table out of the registry, so its values rendered English in a translated locale
+ * while `i18n:coverage` still reported 100% — the table was never counted in the first place.
+ *
+ * The import is followed one file deep, by module specifier relative to the importing file, which covers
+ * the alias-free tables this client uses (`./modelPicker`, `../lib/mcpState`).
+ */
+function importedInitializer(sf: ts.SourceFile, name: string): ts.Node | undefined {
+	let specifier: string | undefined;
+	for (const statement of sf.statements) {
+		if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
+			continue;
+		const bindings = statement.importClause?.namedBindings;
+		if (!bindings || !ts.isNamedImports(bindings)) continue;
+		for (const element of bindings.elements) {
+			if ((element.name.text ?? "") !== name) continue;
+			// `import { LEVEL_HINT as HINT }` reads through the declared name, not the local alias.
+			specifier = statement.moduleSpecifier.text;
+		}
+	}
+	if (!specifier?.startsWith(".")) return undefined;
+	const base = join(sf.fileName, "..", specifier);
+	for (const candidate of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
+		let text: string;
+		try {
+			text = readFileSync(candidate, "utf8");
+		} catch {
+			continue;
+		}
+		return initializerFor(
+			ts.createSourceFile(candidate, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX),
+			name,
+		);
+	}
+	return undefined;
+}
+
+for (const file of [root, ...PACKAGE_ROOTS].flatMap((dir) => walk(dir))) {
 	const text = readFileSync(file, "utf8");
 	const sf = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX);
 	const visit = (node: ts.Node) => {
@@ -127,6 +176,13 @@ for (const file of walk(root)) {
 	};
 	visit(sf);
 }
+
+/**
+ * Host errors are user-visible too, but they are thrown in a package this client may not import —
+ * `scripts/i18n-host-messages.ts` derives their templates, and they belong in the registry so a
+ * translation gap in what a toast can say is measured like any other gap.
+ */
+for (const message of HOST_MESSAGES) keys.add(message.key);
 
 /**
  * Built-in extensions describe themselves in the host manifest, and `ExtensionsSettings` renders that

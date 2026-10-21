@@ -1,4 +1,5 @@
 import type { OpenBranchReview } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import { isOpenBranchReview } from "../../panels/useOpenBranchReview";
 
 export interface RemoteCounts {
@@ -23,15 +24,20 @@ export function reviewTone(review: OpenBranchReview): ReviewTone {
 	return review.state === "merged" ? "info" : review.state === "closed" ? "neutral" : "success";
 }
 
-export function reviewStateLabel(review: OpenBranchReview): "Open" | "Merged" | "Closed" {
-	return review.state === "merged" ? "Merged" : review.state === "closed" ? "Closed" : "Open";
+export function reviewStateLabel(review: OpenBranchReview): string {
+	return review.state === "merged"
+		? t("Merged")
+		: review.state === "closed"
+			? t("Closed")
+			: t("Open");
 }
 
 /** `PR #12` while open; `Merged #12` / `Closed #12` afterwards (MRs keep their `!`). */
 export function reviewChipLabel(review: OpenBranchReview): string {
 	const ref = `${review.kind === "pull-request" ? "#" : "!"}${review.number}`;
-	if (isOpenBranchReview(review)) return `${review.kind === "pull-request" ? "PR" : "MR"} ${ref}`;
-	return `${reviewStateLabel(review)} ${ref}`;
+	if (isOpenBranchReview(review))
+		return t("{0} {1}", review.kind === "pull-request" ? t("PR") : t("MR"), ref);
+	return t("{0} {1}", reviewStateLabel(review), ref);
 }
 
 export function projectInitial(name: string): string {
@@ -40,5 +46,5 @@ export function projectInitial(name: string): string {
 }
 
 export function pluralCommits(count: number): string {
-	return `${count} commit${count === 1 ? "" : "s"}`;
+	return count === 1 ? t("1 commit") : t("{0} commits", count);
 }

@@ -9,6 +9,7 @@ import {
 import type { ToolRenderProps, ToolStatus } from "@thinkrail/extension-api/web";
 import { cn } from "@thinkrail/ui/utils";
 import { useContext } from "react";
+import { t } from "@/i18n";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { PendingExtUiContext, ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
@@ -116,7 +117,7 @@ export function ThinkingGroup({
 			? live
 				? liveActivityTicker(tools, workspaceRoot)
 				: summarizeSteps(tools)
-			: `${formatChars(thought.text.length)} chars`;
+			: t("{0} chars", formatChars(thought.text.length));
 	return (
 		<GroupDisclosure
 			id={id}
@@ -126,7 +127,7 @@ export function ThinkingGroup({
 			live={live}
 			stepCount={tools.length}
 			icon={<Brain className="size-12 shrink-0" />}
-			label="Thinking"
+			label={t("Thinking")}
 			headline={extractThinkingHeading(thought.text)}
 			breadcrumbLabel="Thinking"
 			breadcrumbMeta={summary}
@@ -315,19 +316,20 @@ export function summarizeSteps(steps: ActivityStep[]): string {
 	}
 	const names = [...counts.entries()].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name));
 	const MAX_NAMES = 4;
-	const shown = names.slice(0, MAX_NAMES).join(", ");
+	const shown = names.slice(0, MAX_NAMES).join(t(", "));
 	const more = names.length - MAX_NAMES;
-	const count = `${flatSteps.length} ${flatSteps.length === 1 ? "step" : "steps"}`;
-	return `${count} · ${shown}${more > 0 ? `, +${more} more` : ""}`;
+	const count = flatSteps.length === 1 ? t("1 step") : t("{0} steps", flatSteps.length);
+	const total = more > 0 ? t("{0}, +{1} more", shown, more) : shown;
+	return t("{0} · {1}", count, total);
 }
 
 function liveActivityTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
 	const flatSteps = flattenActivitySteps(steps);
 	const current = flatSteps[flatSteps.length - 1];
-	if (!current) return "Working…";
-	if (current.kind === "thinking") return "Thinking…";
+	if (!current) return t("Working…");
+	if (current.kind === "thinking") return t("Thinking…");
 	const summary = getToolSummary(current.toolName, toolRenderProps(current, workspaceRoot));
-	return summary ? `${current.toolName} · ${summary}` : `${current.toolName}…`;
+	return summary ? t("{0} · {1}", current.toolName, summary) : t("{0}…", current.toolName);
 }
 
 function toolRenderProps(

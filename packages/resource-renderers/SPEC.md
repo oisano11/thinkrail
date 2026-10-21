@@ -86,6 +86,14 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
+- **Copy and the translator** — the package writes its interface text as English keys and translates them
+  through `src/i18n.ts`: `t(key, …args)` with positional `{0}` placeholders, and `setResourceTranslator(fn)`
+  for the host to install. It is a module function rather than a host field because renderer copy is read
+  outside React — renderer labels while the registry is built, and the pure registry helpers `threadLabel` /
+  `outdatedReason`, which take no context. The default translator is the English key with its placeholders
+  filled, so the package renders correctly with nothing installed. A host installs its translator **before**
+  `registerBundledResourceRenderers()`, because registration reads renderer labels.
+
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference

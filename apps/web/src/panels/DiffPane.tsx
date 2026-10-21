@@ -10,6 +10,7 @@ import {
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
 import { useMemo, useState } from "react";
+import { t } from "@/i18n";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
 import { isFileComparison, selectDiffTabTargetRef, useAppStore } from "../store";
@@ -150,7 +151,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 			<div
 				data-testid="diff-view-toggle"
 				role="toolbar"
-				aria-label="Diff view mode"
+				aria-label={t("Diff view mode")}
 				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
 				<span
@@ -174,7 +175,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 				{hunkActions ? (
 					<HeaderIconButton
 						testid="diff-revert-file"
-						label="Revert file"
+						label={t("Revert file")}
 						onClick={() => void hunkActions.revertFile()}
 					>
 						<Revert className="size-14" />
@@ -183,7 +184,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 				{renderer.capabilities.whitespace ? (
 					<HeaderIconButton
 						testid="diff-toggle-whitespace"
-						label="Hide whitespace changes"
+						label={t("Hide whitespace changes")}
 						active={ignoreWhitespace}
 						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
 					>
@@ -193,7 +194,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 				{renderer.capabilities.copy ? (
 					<HeaderIconButton
 						testid="diff-copy"
-						label="Copy file contents"
+						label={t("Copy file contents")}
 						onClick={() => void copy()}
 					>
 						{copied ? (

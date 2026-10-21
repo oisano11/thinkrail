@@ -23,6 +23,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { t } from "@/i18n";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -529,7 +530,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							>
 								<Sparkles className="size-12 shrink-0" />
 								<span className="truncate">
-									No prompt templates yet — add starters in Settings → Templates
+									{t("No prompt templates yet — add starters in Settings → Templates")}
 								</span>
 							</button>
 						) : null
@@ -645,10 +646,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							rows={1}
 							placeholder={
 								isStreaming
-									? "Steer the agent at its next step…"
+									? t("Steer the agent at its next step…")
 									: expanded
-										? "Message the agent…  (@ files · / commands)"
-										: "Message…"
+										? t("Message the agent…  (@ files · / commands)")
+										: t("Message…")
 							}
 							className={cn(
 								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
@@ -657,12 +658,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
-						<IconTooltip label="Search history">
+						<IconTooltip label={t("Search history")}>
 							<Button
 								variant="ghost"
 								size="icon"
 								data-testid="history-open"
-								aria-label="Search history"
+								aria-label={t("Search history")}
 								onClick={openHistory}
 								className="rounded-full"
 							>
@@ -673,12 +674,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							<button
 								type="button"
 								data-testid="chat-abort"
-								aria-label="Stop"
+								aria-label={t("Stop")}
 								onClick={onAbort}
 								className={STOP_PILL}
 							>
 								<StopFill className="size-12" />
-								<span className={WIDE_ONLY}>Stop</span>
+								<span className={WIDE_ONLY}>{t("Stop")}</span>
 							</button>
 						) : null}
 						<div
@@ -689,7 +690,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							<button
 								type="button"
 								data-testid="chat-send"
-								aria-label={isStreaming ? "Steer" : "Send"}
+								aria-label={isStreaming ? t("Steer") : t("Send")}
 								onClick={() => submit(isStreaming ? "steer" : "send")}
 								disabled={!canSend}
 								className={cn(
@@ -699,19 +700,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								)}
 							>
 								<ArrowUp className={cn("size-16", COMPACT_ONLY)} />
-								<span className={WIDE_ONLY}>{isStreaming ? "Steer" : "Send"}</span>
+								<span className={WIDE_ONLY}>{isStreaming ? t("Steer") : t("Send")}</span>
 								<kbd aria-hidden className={cn(KEYCAP, WIDE_ONLY)}>
 									<EnterKey className="size-12" />
 								</kbd>
 							</button>
 							{isStreaming ? (
 								<Popover open={sendMenuOpen} onOpenChange={setSendMenuOpen}>
-									<IconTooltip label="Send options" wrapTrigger>
+									<IconTooltip label={t("Send options")} wrapTrigger>
 										<PopoverTrigger asChild>
 											<button
 												type="button"
 												data-testid="send-menu"
-												aria-label="Send options"
+												aria-label={t("Send options")}
 												className={cn(
 													SEND_MORE,
 													canSend

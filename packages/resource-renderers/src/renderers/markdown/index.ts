@@ -1,8 +1,11 @@
+import { t } from "../../i18n";
 import type { ResourceRenderer } from "../../registry";
 
 export const markdownRenderer: ResourceRenderer = {
 	id: "thinkrail/markdown",
-	label: "Preview",
+	get label() {
+		return t("Preview");
+	},
 	match: { glob: ["*.md", "*.mdx"], text: true },
 	rank: 110,
 	capabilities: {

@@ -1,6 +1,7 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { t } from "../i18n";
 import type { ReviewThread, SurfaceReview } from "../registry";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
@@ -160,9 +161,9 @@ export function PreviewCommenting({
 
 	const label = selection
 		? selection.startLine === selection.endLine
-			? `Line ${selection.startLine}`
-			: `Lines ${selection.startLine}–${selection.endLine}`
-		: "Whole file (couldn't locate the fragment)";
+			? t("Line {0}", selection.startLine)
+			: t("Lines {0}–{1}", selection.startLine, selection.endLine)
+		: t("Whole file (couldn't locate the fragment)");
 
 	const draft = selection
 		? {
@@ -197,8 +198,8 @@ export function PreviewCommenting({
 					ref={iconRef}
 					type="button"
 					data-testid="review-add-icon"
-					title="Comment on selection"
-					aria-label="Comment on selection"
+					title={t("Comment on selection")}
+					aria-label={t("Comment on selection")}
 					onMouseDown={(e) => e.preventDefault()}
 					onClick={openComposer}
 					className="review-add-icon review-add-icon-float"

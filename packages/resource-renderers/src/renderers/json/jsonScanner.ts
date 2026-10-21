@@ -1,4 +1,5 @@
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { t } from "../../i18n";
 import type { AnchorDraft, ReviewThread } from "../../registry";
 
 export type JsonNodeType = "object" | "array" | "string" | "number" | "boolean" | "null";
@@ -49,7 +50,8 @@ class JsonScanner {
 		this.skipTrivia();
 		const root = this.parseNode("");
 		this.skipTrivia();
-		if (this.index !== this.text.length) throw new Error("Unexpected content after JSON value");
+		if (this.index !== this.text.length)
+			throw new Error(t(t("Unexpected content after JSON value")));
 		return { value: root.value, root, nodes: this.nodes, dialect: this.dialect };
 	}
 
@@ -76,7 +78,7 @@ class JsonScanner {
 			if (this.text.startsWith("/*", this.index)) {
 				this.dialect = "jsonc";
 				const end = this.text.indexOf("*/", this.index + 2);
-				if (end < 0) throw new Error("Unterminated JSON comment");
+				if (end < 0) throw new Error(t(t("Unterminated JSON comment")));
 				this.index = end + 2;
 				continue;
 			}
@@ -86,7 +88,7 @@ class JsonScanner {
 
 	private parseString(): { value: string; start: number; end: number } {
 		const start = this.index;
-		if (this.text[this.index] !== '"') throw new Error("Expected JSON string");
+		if (this.text[this.index] !== '"') throw new Error(t(t("Expected JSON string")));
 		this.index += 1;
 		let escaped = false;
 		while (this.index < this.text.length) {
@@ -97,13 +99,13 @@ class JsonScanner {
 				return { value: JSON.parse(raw) as string, start, end: this.index };
 			}
 			if (!escaped && (char === "\n" || char === "\r")) {
-				throw new Error("Line break in JSON string");
+				throw new Error(t(t("Line break in JSON string")));
 			}
 			if (!escaped && char === "\\") escaped = true;
 			else escaped = false;
 			this.index += 1;
 		}
-		throw new Error("Unterminated JSON string");
+		throw new Error(t(t("Unterminated JSON string")));
 	}
 
 	private parseNode(pointer: string, key?: string, propertyStart?: number): JsonNode {
@@ -151,7 +153,7 @@ class JsonScanner {
 			this.index += number.length;
 			return { type: "number", value: Number(number), children: [], end: this.index };
 		}
-		throw new Error("Expected JSON value");
+		throw new Error(t(t("Expected JSON value")));
 	}
 
 	private parseObject(pointer: string): ParsedValue {
@@ -168,7 +170,7 @@ class JsonScanner {
 			this.skipTrivia();
 			const key = this.parseString();
 			this.skipTrivia();
-			if (this.text[this.index] !== ":") throw new Error("Expected colon after JSON key");
+			if (this.text[this.index] !== ":") throw new Error(t(t("Expected colon after JSON key")));
 			this.index += 1;
 			const childPointer = `${pointer}/${escapePointerSegment(key.value)}`;
 			const duplicateIndex = childIndex.get(key.value);
@@ -193,7 +195,7 @@ class JsonScanner {
 				this.index += 1;
 				return { type: "object", value, children, end: this.index };
 			}
-			if (separator !== ",") throw new Error("Expected comma between JSON properties");
+			if (separator !== ",") throw new Error(t(t("Expected comma between JSON properties")));
 			this.index += 1;
 			this.skipTrivia();
 			if (this.text[this.index] === "}") {
@@ -224,7 +226,7 @@ class JsonScanner {
 				this.index += 1;
 				return { type: "array", value, children, end: this.index };
 			}
-			if (separator !== ",") throw new Error("Expected comma between JSON items");
+			if (separator !== ",") throw new Error(t(t("Expected comma between JSON items")));
 			this.index += 1;
 			this.skipTrivia();
 			if (this.text[this.index] === "]") {

@@ -1,6 +1,7 @@
 import { type ReactNode, useMemo } from "react";
 import type { Components } from "react-markdown";
 import { useResourceHost } from "../../host";
+import { t } from "../../i18n";
 import { classifyHref, resolveRelativePath } from "../../support/markdownLinks";
 import type { NotebookCell, NotebookOutput } from "./notebookModel";
 import {
@@ -68,15 +69,15 @@ export function notebookMarkdownComponents(
 		if (source.kind === "svg") {
 			return (
 				<NotebookFrame
-					title={title ?? alt ?? "Notebook SVG image"}
+					title={title ?? alt ?? t("Notebook SVG image")}
 					document={buildNotebookSvgDocument(source.svg)}
 				/>
 			);
 		}
 		return (
 			<span data-testid="notebook-disabled-image" className="text-text-muted">
-				{alt ? `${alt}: ` : "Image disabled: "}
-				{src ?? "missing URL"}
+				{alt ? `${alt}: ` : t("Image disabled: ")}
+				{src ?? t("missing URL")}
 			</span>
 		);
 	}
@@ -217,7 +218,7 @@ export function NotebookOutputs({ cell }: { cell: NotebookCell }) {
 				<NotebookOutputItem
 					key={`${output.kind}:${index}`}
 					output={output}
-					title={`Output ${index + 1} of cell ${cell.index + 1}`}
+					title={t("Output {0} of cell {1}", index + 1, cell.index + 1)}
 				/>
 			))}
 		</div>

@@ -6,6 +6,7 @@ import type {
 	SurfaceReview,
 } from "@thinkrail/resource-renderers";
 import { useMemo, useState } from "react";
+import { t } from "@/i18n";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport, supportsRichAnchors } from "../transport";
 import { fileThreads, sameThreads } from "./reviewModel";
@@ -53,7 +54,7 @@ export function useFileReview(
 				try {
 					await getTransport().request("review.commentDelete", { workspaceId, id });
 				} catch (error) {
-					toast.error(errorText(error), "Couldn't delete the draft");
+					toast.error(errorText(error), t("Couldn't delete the draft"));
 					throw error;
 				}
 			},
@@ -61,7 +62,7 @@ export function useFileReview(
 				try {
 					await getTransport().request("review.commentUpdate", { workspaceId, id, body });
 				} catch (error) {
-					toast.error(errorText(error), "Couldn't update the comment");
+					toast.error(errorText(error), t("Couldn't update the comment"));
 					throw error;
 				}
 			},
@@ -131,8 +132,10 @@ export function commentKindForDraft(
 		: "file";
 }
 
-export const RICH_ANCHOR_HOST_TOO_OLD =
-	"This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.";
+const RICH_ANCHOR_HOST_TOO_OLD = () =>
+	t(
+		"This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.",
+	);
 
 export function draftNeedsRichAnchors(draft: AnchorDraft): boolean {
 	return draft.selectors.some(
@@ -153,7 +156,7 @@ function sideCommenting(
 			draftNeedsRichAnchors(draft) &&
 			!supportsRichAnchors(useAppStore.getState().protocolVersion)
 		) {
-			return Promise.reject(new Error(RICH_ANCHOR_HOST_TOO_OLD));
+			return Promise.reject(new Error(RICH_ANCHOR_HOST_TOO_OLD()));
 		}
 		return getTransport().request("review.commentAdd", {
 			workspaceId,
@@ -168,7 +171,7 @@ function sideCommenting(
 			try {
 				await add(draft, text);
 			} catch (error) {
-				toast.error(errorText(error), "Couldn't save the comment");
+				toast.error(errorText(error), t("Couldn't save the comment"));
 				throw error;
 			}
 		},
@@ -177,7 +180,7 @@ function sideCommenting(
 			try {
 				comment = await add(draft, text);
 			} catch (error) {
-				toast.error(errorText(error), "Couldn't save the comment");
+				toast.error(errorText(error), t("Couldn't save the comment"));
 				throw error;
 			}
 			await sendReviewComment(workspaceId, comment.id, chatSessionId);

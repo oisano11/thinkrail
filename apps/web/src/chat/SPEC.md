@@ -824,7 +824,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   chats" once the pair matches) and the **Refresh** row (`force: true`, spins and reads "Updating…" while
   the awaited refresh runs; opening fires an unforced read served from the host snapshot). The web still keeps **no
   enumeration of the level vocabulary**: rows are `WireModel.thinkingLevels` verbatim, the host clamps,
-  and `LEVEL_HINT` is a partial record of qualitative copy a level may simply lack. Rows follow the
+  and `LEVEL_HINT` is a partial record of qualitative copy a level may simply lack while `LEVEL_LABEL`
+  names the six-plus-one levels for the pill and every row (both stay English in `modelPicker.ts`, the
+  read site translates them, so an unknown level renders its raw value rather than nothing). Rows follow the
   **live catalog** — `ChatView` resolves the session's model through `store`'s `selectCatalogModel`
   before passing it down, so a `model.refresh` that changes what a model supports changes the offered
   levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —

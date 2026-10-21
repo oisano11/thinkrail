@@ -1,8 +1,11 @@
+import { t } from "../../i18n";
 import type { ResourceRenderer } from "../../registry";
 
 export const lfsRenderer: ResourceRenderer = {
 	id: "thinkrail/lfs",
-	label: "LFS",
+	get label() {
+		return t("LFS");
+	},
 	match: { mime: ["application/vnd.git-lfs"], text: true },
 	rank: 130,
 	capabilities: {

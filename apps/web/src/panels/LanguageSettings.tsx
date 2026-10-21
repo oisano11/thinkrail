@@ -17,7 +17,7 @@ const CHOICES: SettingsRadioChoice<Locale>[] = [
 	{
 		id: "zh-CN",
 		label: LOCALE_LABELS["zh-CN"],
-		description: "界面以简体中文显示；Spec、Workspace、Review 等术语保留英文。",
+		description: "界面与新增文案使用简体中文；Spec、Workspace、Review 等术语保留英文。",
 		testId: "language-option-zh-CN",
 	},
 	{

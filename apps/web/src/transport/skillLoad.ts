@@ -4,6 +4,7 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
+import { t } from "@/i18n";
 import { selectWorkspaceTick, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
 
@@ -62,7 +63,7 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 				result.summary.workspaceId !== params.workspaceId ||
 				result.summary.sessionId !== params.sessionId
 			) {
-				throw new Error("Session response did not match the requested workspace and session");
+				throw new Error(t(t("Session response did not match the requested workspace and session")));
 			}
 			return { result, syncedTick };
 		},
