@@ -1,0 +1,242 @@
+name: publish-zh
+
+# Builds this fork's desktop app on top of upstream and republishes the update feed
+# that the packaged app points at (`release.baseUrl` in apps/desktop/electrobun.config.ts).
+# Because the feed is this repository, an installed build follows these releases and
+# never the official ones.
+#
+# Version scheme: `<newest upstream tag>-zh.<n>`, e.g. `0.3.0-nightly.6-zh.1`. The base
+# comes from the newest tag reachable from the built commit, so the number always sorts
+# above the upstream release it derives from — which is exactly what makes the app
+# accept the update. The release body is the ledger (`upstream-sha:` / `version:`);
+# nothing is ever stamped into the branch, so upstream merges never conflict on
+# version.ts.
+on:
+  schedule:
+    # Daily, off-peak for the upstream project (03:17 UTC).
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream branch, tag or sha to build from."
+        required: false
+        default: main
+        type: string
+      force:
+        description: "Rebuild even when this upstream commit was already published."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: publish-zh
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: JetBrains/thinkrail
+  FEED_RELEASE: desktop-updates
+  BUN_VERSION: "1.4.4"
+
+jobs:
+  publish:
+    # macos-15 is arm64 on public repositories, and arm64 is the only desktop target
+    # this fork builds.
+    runs-on: macos-15
+    steps:
+      - name: Check out the fork branch
+        uses: actions/checkout@v4
+        with:
+          ref: zh
+          fetch-depth: 0
+
+      - name: Require the architecture we ship
+        run: |
+          set -euo pipefail
+          machine=$(uname -m)
+          echo "runner architecture: $machine"
+          if [ "$machine" != "arm64" ]; then
+            echo "::error::this job needs an arm64 runner, got $machine"
+            exit 1
+          fi
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Resolve the upstream revision
+        id: upstream
+        env:
+          REQUESTED: ${{ inputs.upstream_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null || true
+          git fetch --tags --force upstream
+
+          sha=$(git rev-parse --verify "upstream/${REQUESTED}^{commit}" 2>/dev/null \
+            || git rev-parse --verify "${REQUESTED}^{commit}")
+          # The nearest release tag at or below the built commit: the version's base.
+          base=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$sha" 2>/dev/null || echo "v0.0.0")
+          echo "ref=$REQUESTED" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "base=${base#v}" >> "$GITHUB_OUTPUT"
+          echo "resolved $REQUESTED -> $sha (base ${base#v})"
+
+      - name: Decide whether to rebuild and which version to stamp
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.upstream.outputs.sha }}
+          BASE: ${{ steps.upstream.outputs.base }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          body=$(gh release view "$FEED_RELEASE" --json body --jq '.body' 2>/dev/null || true)
+          published_sha=$(printf '%s' "$body" | sed -n 's/^upstream-sha: //p' | tail -n 1)
+          published_version=$(printf '%s' "$body" | sed -n 's/^version: //p' | tail -n 1)
+
+          if [ "${FORCE:-false}" != "true" ] && [ -n "$published_sha" ] && [ "$published_sha" = "$SHA" ]; then
+            echo "rebuild=false" >> "$GITHUB_OUTPUT"
+            echo "upstream $SHA is already published, nothing to do"
+            exit 0
+          fi
+
+          serial=1
+          case "$published_version" in
+            "${BASE}-zh."*) serial=$(( ${published_version##*-zh.} + 1 )) ;;
+          esac
+
+          echo "rebuild=true" >> "$GITHUB_OUTPUT"
+          echo "version=${BASE}-zh.${serial}" >> "$GITHUB_OUTPUT"
+          echo "building ${BASE}-zh.${serial} from $SHA"
+
+      - name: Merge upstream into the fork branch
+        if: steps.decide.outputs.rebuild == 'true'
+        id: merge
+        env:
+          SHA: ${{ steps.upstream.outputs.sha }}
+          REF: ${{ steps.upstream.outputs.ref }}
+        run: |
+          set -euo pipefail
+          git checkout -B zh "origin/zh"
+          if git merge-base --is-ancestor "$SHA" HEAD; then
+            echo "upstream $REF is already an ancestor of the branch"
+          elif ! git merge --no-ff --no-edit -m "chore: merge upstream ${REF} (${SHA:0:7})" "$SHA"; then
+            git merge --abort || true
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "conflict=false" >> "$GITHUB_OUTPUT"
+
+      - name: Report a conflict and stop
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ steps.upstream.outputs.ref }}
+          SHA: ${{ steps.upstream.outputs.sha }}
+        run: |
+          set -euo pipefail
+          title="publish-zh: merging upstream ${REF} conflicts"
+          body=$(printf 'The build could not merge upstream `%s` (`%s`).\n\nResolve it on the `zh` branch, then re-run this workflow.\n\n- run: %s/%s/actions/runs/%s\n' \
+            "$REF" "$SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // ""')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
+          echo "::error::upstream $REF conflicts with the local customisations"
+          exit 1
+
+      - name: Install dependencies
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        run: bun install --frozen-lockfile
+
+      # Deliberately uncommitted: the branch stays a plain "upstream + our
+      # customisations" merge chain, so a later merge never conflicts on version.ts.
+      - name: Stamp the release identity
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: |
+          set -euo pipefail
+          cat > packages/shared/src/version.ts <<EOF
+          export const version = "${VERSION}";
+          export const channel = "stable";
+          export const commit = "$(git rev-parse --short HEAD)";
+          export const posthogProjectKey = "";
+          EOF
+          cat packages/shared/src/version.ts
+
+      - name: Package the stable desktop build
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        run: bun run --cwd apps/desktop package:stable
+
+      - name: Check the artifacts the feed needs
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        id: artifacts
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: |
+          set -euo pipefail
+          artifacts=apps/desktop/artifacts
+          manifest="$artifacts/stable-macos-arm64-update.json"
+          archive="$artifacts/stable-macos-arm64-ThinkRail.app.tar.zst"
+          dmg="$artifacts/macos-arm64-ThinkRail.dmg"
+          for path in "$manifest" "$archive" "$dmg"; do
+            if [ ! -f "$path" ]; then
+              echo "::error::missing build artifact $path"
+              exit 1
+            fi
+          done
+          echo "--- $manifest"
+          cat "$manifest"
+          MANIFEST="$manifest" VERSION="$VERSION" bun -e '
+            const manifest = await Bun.file(process.env.MANIFEST).json();
+            const expected = "stable-macos-arm64-ThinkRail.app.tar.zst";
+            const fail = (message) => {
+              console.error(`::error::${message}`);
+              process.exit(1);
+            };
+            if (manifest.artifact?.file !== expected)
+              fail(`manifest points at ${manifest.artifact?.file}, not ${expected}`);
+            if (manifest.channel !== "stable" || manifest.platform !== "macos" || manifest.arch !== "arm64")
+              fail("manifest is not a stable macos arm64 release");
+            if (manifest.version !== process.env.VERSION)
+              fail(`manifest version ${manifest.version} is not ${process.env.VERSION}`);
+            console.log("manifest is consistent with the artifacts we built");
+          '
+          echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "dmg=$dmg" >> "$GITHUB_OUTPUT"
+
+      - name: Push the merged branch
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        run: git push origin zh
+
+      - name: Publish the update feed
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.decide.outputs.version }}
+          REF: ${{ steps.upstream.outputs.ref }}
+          SHA: ${{ steps.upstream.outputs.sha }}
+          MANIFEST: ${{ steps.artifacts.outputs.manifest }}
+          ARCHIVE: ${{ steps.artifacts.outputs.archive }}
+          DMG: ${{ steps.artifacts.outputs.dmg }}
+        run: |
+          set -euo pipefail
+          notes=$(printf 'Simplified Chinese interface with a font-size slider, built from upstream `%s`.\n\nupstream-sha: %s\nversion: %s\n' "$REF" "$SHA" "$VERSION")
+          if gh release view "$FEED_RELEASE" >/dev/null 2>&1; then
+            gh release edit "$FEED_RELEASE" --notes "$notes"
+          else
+            gh release create "$FEED_RELEASE" --target zh --title "ThinkRail zh update feed" --notes "$notes"
+          fi
+          gh release upload "$FEED_RELEASE" "$MANIFEST" "$ARCHIVE" "$DMG" --clobber
+          echo "published $VERSION from $REF ($SHA) to $FEED_RELEASE"
