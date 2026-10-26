@@ -162,6 +162,44 @@ jobs:
         if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
         run: bun install --frozen-lockfile
 
+      # Upstream adds and rewrites English keys faster than a hand-maintained
+      # translation follows. The script only fills the gap; when no key drifted it
+      # writes nothing, so a quiet day leaves the branch untouched.
+      #
+      # A failed translation must not stop the build: an untranslated key renders
+      # English at runtime, which is a degraded interface rather than a broken one.
+      # The warning is the signal that the feed shipped with a gap.
+      - name: Translate whatever upstream added since the last build
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        id: translate
+        continue-on-error: true
+        env:
+          THINKRAIL_CATALOG_API_KEY: ${{ secrets.THINKRAIL_CATALOG_API_KEY }}
+          THINKRAIL_CATALOG_API_BASE: ${{ vars.THINKRAIL_CATALOG_API_BASE || 'https://openrouter.ai/api/v1' }}
+          THINKRAIL_CATALOG_MODEL: ${{ vars.THINKRAIL_CATALOG_MODEL || 'deepseek/deepseek-chat' }}
+        run: |
+          set -uo pipefail
+          bun scripts/sync-catalog.ts --tag zh-CN --check && drifted=0 || drifted=1
+          if [ "$drifted" = "1" ]; then
+            bun scripts/sync-catalog.ts --tag zh-CN || \
+              echo "::warning::sync-catalog could not finish; the build keeps English for the keys it missed"
+          fi
+          if git diff --quiet -- packages/locales/zh-CN.json; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- packages/locales/zh-CN.json
+          fi
+
+      - name: Commit the new translations
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false' && steps.translate.outputs.drift == 'true'
+        run: |
+          set -euo pipefail
+          git add packages/locales/zh-CN.json
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit --no-verify -m "chore(locales): translate the keys upstream added"
+
       # Deliberately uncommitted: the branch stays a plain "upstream + our
       # customisations" merge chain, so a later merge never conflicts on version.ts.
       - name: Stamp the release identity
