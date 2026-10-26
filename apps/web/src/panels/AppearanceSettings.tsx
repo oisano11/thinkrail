@@ -39,6 +39,7 @@ import {
 import { errorText, getTransport, supportsFonts } from "@/transport";
 import { CustomFontsGroup } from "./CustomFontsSettings";
 import { CustomThemesGroup } from "./CustomThemesSettings";
+import { FontScaleControl } from "./FontScaleSettings";
 import { FontsGroup } from "./FontsSettings";
 import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
@@ -474,6 +475,7 @@ export function AppearanceSettings() {
 			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
 				<LineWidthControl kind="file" />
+				<FontScaleControl />
 			</SettingsGroup>
 		</SettingsPageContainer>
 	);

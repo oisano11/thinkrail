@@ -459,7 +459,10 @@ describe("generated CSS", () => {
 			/^\.pierre-code-surface \{([^}]*)\}/m.exec(read(join(SRC, "index.css")))?.[1] ?? "";
 		expect(monaco).toContain('resolveFont("tr-code-editor")');
 		expect(xterm).toContain('resolveFont("tr-code-block")');
-		expect(monaco).toContain('cssVar("--tr-line-height-default")');
+		// Monaco takes the code size and row height as values from the resource host, so an open
+		// editor follows the reader's font scale instead of a property read once at render.
+		expect(monaco).not.toContain('cssVar("--tr-line-height-default")');
+		expect(monaco).toContain("code.rowHeight");
 		expect(pierre).toContain("--diffs-font-size: var(--tr-font-size-code-dense);");
 		expect(pierre).toContain("--diffs-line-height: var(--tr-code-row-height);");
 		expect(pierre).toContain("font-variant-ligatures: var(--tr-font-ligatures-code);");

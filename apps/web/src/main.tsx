@@ -15,6 +15,7 @@ import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
+import { applyFontScale, readFontScale } from "./styles/fontScale";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -26,6 +27,7 @@ import {
 initializeThemes();
 applyThemePreference(readThemeHint());
 initializeFonts();
+applyFontScale(readFontScale());
 initTransport();
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>
