@@ -12,6 +12,7 @@ import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
+import { applyFontScale, readFontScale } from "./styles/fontScale";
 import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -22,6 +23,7 @@ import {
 
 initializeBundledThemes();
 applyThemePreference(readThemeHint());
+applyFontScale(readFontScale());
 initTransport();
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>

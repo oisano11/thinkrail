@@ -270,6 +270,17 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
 
+### One runtime exception: the reader's font scale
+
+`styles/fontScale.ts` is the single place that overrides a generated primitive at runtime. It scales
+the `--tr-font-size-*` properties and `--tr-code-row-height` on `documentElement` from the reader's
+own preference (`Settings → Appearance → Font size`), so someone who wants larger text gets it
+without a rebuild. It is not a design token: it never changes what the system *is*, only the one
+multiplier a reader applies to it, and at the default scale it removes every override so the
+generated CSS is used verbatim. Nothing else may touch these properties at runtime, and no
+component may read or write them directly — go through `applyFontScale` / `readFontScale` /
+`writeFontScale`.
+
 ## Adding or changing a style
 
 1. Edit `styles/typography.json` — a new primitive, or a new entry under `textStyles` / `proseSystems`.
@@ -284,6 +295,9 @@ The OTP code is **not** an exception any more: it is the named `code.otp` style 
 Do **not**: add a typography utility or `--text-*` mapping to `index.css`, add a font alias to
 `tokens.css`, declare a font property in a component, or edit `styles/generated/typography.css`. The
 pre-commit hook and `apps/web build` run `typography:check`, so stale generated CSS cannot land.
+
+The one runtime exception — the reader's font scale — is documented under "Permitted exceptions"
+above and lives in `styles/fontScale.ts`.
 
 This primitives + semantic-tokens + schema + generator shape is the pattern a **colours** JSON should
 mirror; nothing here is Tailwind-specific, and Tailwind merely consumes the generated CSS.
