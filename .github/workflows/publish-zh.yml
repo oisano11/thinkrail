@@ -40,6 +40,10 @@ env:
   UPSTREAM_REPO: JetBrains/thinkrail
   FEED_RELEASE: desktop-updates
   BUN_VERSION: "1.4.4"
+  # This job adds an `upstream` remote, and gh prefers that remote over `origin`
+  # when it infers the repository — which would point every release and issue
+  # command at the upstream project instead of this fork. Pin it explicitly.
+  GH_REPO: ${{ github.repository }}
 
 jobs:
   publish:
