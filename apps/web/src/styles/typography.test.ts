@@ -54,16 +54,16 @@ describe("typography source", () => {
 
 	it("pins the primitive token values", () => {
 		expect(typography.fontSizes).toEqual({
-			s10: 10,
-			s11: 11,
-			s12: 12,
-			s13: 13,
-			s14: 14,
-			s16: 16,
-			s18: 18,
-			s20: 20,
-			s24: 24,
-			s44: 44,
+			s10: 12,
+			s11: 13,
+			s12: 14,
+			s13: 15,
+			s14: 16,
+			s16: 18,
+			s18: 20,
+			s20: 22,
+			s24: 28,
+			s44: 48,
 		});
 		expect(typography.lineHeights).toEqual({
 			compact: 1.25,
@@ -156,7 +156,7 @@ describe("typography source", () => {
 	it("holds one monotonic heading scale", () => {
 		expect(Object.keys(typography.textStyles.heading)).toEqual(["xl", "lg", "md", "sm"]);
 		const sizes = ["xl", "lg", "md", "sm"].map((n) => px(`heading.${n}`) as number);
-		expect(sizes).toEqual([24, 20, 18, 16]);
+		expect(sizes).toEqual([28, 22, 20, 18]);
 		for (const n of ["xl", "lg", "md", "sm"])
 			expect(resolveStyle(typography, `heading.${n}`), `heading.${n}`).toMatchObject({
 				fontWeight: "semibold",
@@ -176,17 +176,17 @@ describe("prose systems", () => {
 	});
 
 	it("keeps the chat scale compact — a bubble, not a document", () => {
-		expect(px("chat.body")).toBe(14);
-		expect(px("chat.h1")).toBe(18);
-		expect(px("chat.h2")).toBe(14);
-		expect(px("chat.h3")).toBe(12);
-		expect(px("chat.codeBlock")).toBe(13);
+		expect(px("chat.body")).toBe(16);
+		expect(px("chat.h1")).toBe(20);
+		expect(px("chat.h2")).toBe(16);
+		expect(px("chat.h3")).toBe(14);
+		expect(px("chat.codeBlock")).toBe(15);
 	});
 
 	it("gives the document scale headings larger than its body text", () => {
 		const body = px("doc.body") as number;
-		expect(body).toBe(14);
-		expect(["h1", "h2", "h3", "h4"].map((h) => px(`doc.${h}`))).toEqual([24, 20, 18, 16]);
+		expect(body).toBe(16);
+		expect(["h1", "h2", "h3", "h4"].map((h) => px(`doc.${h}`))).toEqual([28, 22, 20, 18]);
 		for (const h of ["h1", "h2", "h3", "h4"])
 			expect(px(`doc.${h}`), `doc.${h} > body`).toBeGreaterThan(body);
 		const ladder = ["h1", "h2", "h3", "h4", "h5", "h6"].map((h) => px(`doc.${h}`) as number);
@@ -197,7 +197,7 @@ describe("prose systems", () => {
 			fontWeight: "semibold",
 			textTransform: "uppercase",
 		});
-		expect(px("doc.codeBlock")).toBe(13);
+		expect(px("doc.codeBlock")).toBe(15);
 		expect(px("doc.codeBlock")).toBeGreaterThanOrEqual(px("chat.codeBlock") as number);
 	});
 
@@ -428,10 +428,10 @@ describe("generated CSS", () => {
 
 	it("exposes the code family + size tokens Monaco and xterm read", () => {
 		expect(GENERATED).toContain("--tr-font-family-code:");
-		expect(GENERATED).toContain("--tr-font-size-s11: 11px;");
-		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
+		expect(GENERATED).toContain("--tr-font-size-s11: 13px;");
+		expect(GENERATED).toContain("--tr-font-size-s13: 15px;");
 		expect(GENERATED).toContain("--tr-line-height-default: 1.3;");
-		expect(GENERATED).toContain("--tr-code-row-height: 14px;");
+		expect(GENERATED).toContain("--tr-code-row-height: 17px;");
 		const monaco = read(
 			join(SRC, "../../../packages/resource-renderers/src/support/monacoSetup.ts"),
 		);

@@ -30,16 +30,16 @@
 	--tr-font-weight-brand: 400;
 
 	/* Font sizes (px) */
-	--tr-font-size-s10: 10px;
-	--tr-font-size-s11: 11px;
-	--tr-font-size-s12: 12px;
-	--tr-font-size-s13: 13px;
-	--tr-font-size-s14: 14px;
-	--tr-font-size-s16: 16px;
-	--tr-font-size-s18: 18px;
-	--tr-font-size-s20: 20px;
-	--tr-font-size-s24: 24px;
-	--tr-font-size-s44: 44px;
+	--tr-font-size-s10: 12px;
+	--tr-font-size-s11: 13px;
+	--tr-font-size-s12: 14px;
+	--tr-font-size-s13: 15px;
+	--tr-font-size-s14: 16px;
+	--tr-font-size-s16: 18px;
+	--tr-font-size-s18: 20px;
+	--tr-font-size-s20: 22px;
+	--tr-font-size-s24: 28px;
+	--tr-font-size-s44: 48px;
 
 	/* Line heights (unitless) */
 	--tr-line-height-compact: 1.25;
@@ -51,7 +51,7 @@
 	--tr-line-height-reading: 1.45;
 
 	/* Code row height (px) — font size × line height, rounded to a whole pixel */
-	--tr-code-row-height: 14px;
+	--tr-code-row-height: 17px;
 
 	/* Letter spacing */
 	--tr-letter-spacing-normal: normal;

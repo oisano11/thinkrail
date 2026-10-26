@@ -188,11 +188,11 @@ describe("markdown prose systems", () => {
 	it("gives the document surface headings larger than its body text", () => {
 		const px = (id: string) => typography.fontSizes[resolveStyle(typography, id).fontSize];
 		const body = px("doc.body") as number;
-		expect(body).toBe(14);
-		expect(px("doc.h1")).toBe(24);
-		expect(px("doc.h2")).toBe(20);
-		expect(px("doc.h3")).toBe(18);
-		expect(px("doc.h4")).toBe(16);
+		expect(body).toBe(16);
+		expect(px("doc.h1")).toBe(28);
+		expect(px("doc.h2")).toBe(22);
+		expect(px("doc.h3")).toBe(20);
+		expect(px("doc.h4")).toBe(18);
 		for (const level of ["h1", "h2", "h3", "h4"])
 			expect(px(`doc.${level}`), `doc.${level} > body`).toBeGreaterThan(body);
 		const ladder = ["h1", "h2", "h3", "h4", "h5", "h6"].map((h) => px(`doc.${h}`) as number);
