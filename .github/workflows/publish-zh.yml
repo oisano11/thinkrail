@@ -52,7 +52,7 @@ jobs:
   publish:
     # macos-15 is arm64 on public repositories, and arm64 is the only desktop target this
     # fork builds.
-    runs-on: macos-15
+    runs-on: macos-14
     steps:
       - name: Check out the fork branch
         uses: actions/checkout@v4
