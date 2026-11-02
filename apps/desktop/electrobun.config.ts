@@ -6,16 +6,19 @@ import type { ElectrobunConfig } from "electrobun";
 const bun = { entrypoint: "src/index.ts", version: "1.4.4" };
 
 export default {
+	// This fork ships its own builds, so the app needs an identity of its own: the same name and
+	// identifier as the upstream bundle would make the two installs overwrite each other, and the
+	// installer refuses an update whose uninstall manifest points at another bundle path.
 	app: {
-		name: "ThinkRail",
-		identifier: "ai.thinkrail.app",
+		name: "ThinkRail-ZH",
+		identifier: "ai.thinkrail.zh",
 		version,
 	},
 	runtime: {
 		exitOnLastWindowClosed: true,
 	},
 	release: {
-		baseUrl: "https://github.com/JetBrains/thinkrail/releases/download/desktop-updates",
+		baseUrl: "https://github.com/oisano11/thinkrail/releases/download/desktop-updates",
 		generatePatch: false,
 	},
 	build: {
