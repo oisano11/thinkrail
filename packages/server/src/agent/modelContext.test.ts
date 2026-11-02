@@ -14,8 +14,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createAgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { isModelContextWritable, type ModelContextSetting } from "@thinkrail/contracts";
 import { parse } from "jsonc-parser";
-import { listModelContextSettings, setModelContextWindow } from "./modelContext";
+import {
+	applyModelContextCeilings,
+	listModelContextSettings,
+	setModelContextWindow,
+} from "./modelContext";
 import { setModelsFilePublisher } from "./modelsFile";
 import { configurePiRuntime } from "./piRuntime";
 
@@ -70,8 +75,8 @@ async function runtime(
 			baseUrl: "http://fixture.invalid",
 			models: [
 				{ ...model, api },
-				{ ...model, id: "gpt-5", contextWindow: 400_000, api },
-				{ ...model, id: "gpt-5.5-pro", contextWindow: 1_050_000, api },
+				{ ...model, id: "gpt-5", name: "GPT-5", contextWindow: 400_000, api },
+				{ ...model, id: "gpt-5.5-pro", name: "GPT-5.5 Pro", contextWindow: 1_050_000, api },
 			],
 		});
 	}
@@ -79,7 +84,9 @@ async function runtime(
 		api: "anthropic-messages",
 		apiKey: "fixture-only-key",
 		baseUrl: "http://fixture.invalid",
-		models: [{ ...model, id: "claude", api: "anthropic-messages" }],
+		models: [
+			{ ...model, id: "claude", name: "Claude", api: "anthropic-messages", contextWindow: 200_000 },
+		],
 	});
 	await result.refresh({ allowNetwork: false });
 	configurePiRuntime(result);
@@ -94,26 +101,92 @@ function temporaryFiles(): string[] {
 	return readdirSync(directory).filter((entry) => entry.startsWith(".models"));
 }
 
-test("only OpenAI Responses models capped at 272K or already overridden are offered", async () => {
-	writeFileSync(
-		path,
-		JSON.stringify({
-			providers: { openai: { modelOverrides: { "gpt-5.5-pro": { contextWindow: 900_000 } } } },
-		}),
-	);
-	await runtime();
-	expect(await listModelContextSettings()).toEqual([
-		{ ...ref, name: "GPT-5.5", contextWindow: 272_000, override: null },
-		{
-			provider: "openai",
-			id: "gpt-5.5-pro",
-			name: "GPT-5.5",
-			contextWindow: 900_000,
-			override: 900_000,
-		},
+test("every available model is offered, with the window a sibling interface declares", async () => {
+	await runtime([
+		["openai", "openai-responses"],
+		["proxy", "openai-responses"],
 	]);
-	await setModelContextWindow({ provider: "openai", id: "gpt-5.5-pro" }, null);
-	expect((await listModelContextSettings()).map((entry) => entry.id)).toEqual(["gpt-5.5"]);
+	const settings = await listModelContextSettings();
+	expect(
+		settings.map((entry) => [entry.provider, entry.id, entry.contextWindow, entry.override]),
+	).toEqual([
+		["openai", "gpt-5.5", 272_000, null],
+		["openai", "gpt-5", 400_000, null],
+		["openai", "gpt-5.5-pro", 1_050_000, null],
+		["proxy", "gpt-5.5", 272_000, null],
+		["proxy", "gpt-5", 400_000, null],
+		["proxy", "gpt-5.5-pro", 1_050_000, null],
+		["other", "claude", 200_000, null],
+	]);
+	// pi's own catalog knows gpt-5.5 reaches 1M on Azure, so that is the ceiling for every interface that
+	// reports less. A model no catalog entry mentions, and an interface that already declares the largest
+	// window, get no suggestion.
+	expect(settings.map((entry) => entry.ceiling)).toEqual([
+		{ contextWindow: 1_000_000, api: "azure-openai-responses" },
+		null,
+		null,
+		{ contextWindow: 1_000_000, api: "azure-openai-responses" },
+		null,
+		null,
+		null,
+	]);
+	// A window below the smallest one this setting can hold is offered read-only rather than adjustable.
+	expect(settings.map((entry) => isModelContextWritable(entry))).toEqual([
+		true,
+		true,
+		true,
+		true,
+		true,
+		true,
+		false,
+	]);
+});
+
+test("a proxy that under-reports a model gets the window its sibling interface declares", async () => {
+	const pi = await runtime();
+	for (const [provider, contextWindow] of [
+		["big", 1_000_000],
+		["thin", 200_000],
+	] as const) {
+		pi.registerProvider(provider, {
+			api: "openai-responses",
+			apiKey: "{{SECRET_9ak2mfx1}}",
+			baseUrl: "http://fixture.invalid",
+			models: [
+				{
+					...model,
+					id: "internal-large",
+					name: "Internal Large",
+					contextWindow,
+					maxTokens: 8_000,
+				},
+			],
+		});
+	}
+	await pi.refresh({ allowNetwork: false });
+	const settings = await listModelContextSettings();
+	expect(settings.find((entry) => entry.provider === "thin")).toMatchObject({
+		id: "internal-large",
+		contextWindow: 200_000,
+		override: null,
+		ceiling: { contextWindow: 1_000_000, api: "openai-responses" },
+	});
+	// Below the floor, and only reachable because the sibling interface declares the larger window.
+	expect(settings.find((entry) => entry.provider === "big")?.ceiling).toBeNull();
+	const applied = await applyModelContextCeilings();
+	expect(applied.find((entry) => entry.provider === "thin")).toMatchObject({
+		contextWindow: 1_000_000,
+		override: 1_000_000,
+		ceiling: null,
+	});
+	expect(pi.getModel("thin", "internal-large")?.contextWindow).toBe(1_000_000);
+	expect(pi.getModel("big", "internal-large")?.contextWindow).toBe(1_000_000);
+	expect(config()).toMatchObject({
+		providers: { thin: { modelOverrides: { "internal-large": { contextWindow: 1_000_000 } } } },
+	});
+	expect(
+		(config().providers as Record<string, Record<string, unknown>>).big?.modelOverrides,
+	).toBeUndefined();
 });
 
 test("saving 1M updates Pi metadata for new chats, keeps live session models, and notifies", async () => {
@@ -132,8 +205,16 @@ test("saving 1M updates Pi metadata for new chats, keeps live session models, an
 	});
 	try {
 		const settings = await setModelContextWindow(ref, 1_000_000);
-		expect(settings).toEqual([
-			{ ...ref, name: "GPT-5.5", contextWindow: 1_000_000, override: 1_000_000 },
+		expect(
+			settings.filter((entry) => entry.id === ref.id && entry.provider === ref.provider),
+		).toEqual([
+			{
+				...ref,
+				name: "GPT-5.5",
+				contextWindow: 1_000_000,
+				override: 1_000_000,
+				ceiling: null,
+			},
 		]);
 		expect(pi.getModel("openai", "gpt-5.5")).toMatchObject({
 			contextWindow: 1_000_000,
@@ -161,9 +242,27 @@ test("Default removes only the override and preserves credentials, comments, mod
 	const pi = await runtime();
 	const settings = await setModelContextWindow(ref, null);
 	expect(JSON.stringify(settings)).not.toContain("private-fixture-sentinel");
-	expect(settings).toEqual([
-		{ ...ref, name: "GPT-5.5", contextWindow: 272_000, override: null },
-		{ provider: "openai", id: "gpt-5", name: "GPT-5.5", contextWindow: 350_000, override: 350_000 },
+	expect(
+		settings.filter(
+			(entry) =>
+				entry.override !== null || (entry.id === ref.id && entry.provider === ref.provider),
+		),
+	).toEqual([
+		{
+			...ref,
+			name: "GPT-5.5",
+			contextWindow: 272_000,
+			override: null,
+			ceiling: { contextWindow: 1_000_000, api: "azure-openai-responses" },
+		},
+		{
+			provider: "openai",
+			id: "gpt-5",
+			name: "GPT-5",
+			contextWindow: 350_000,
+			override: 350_000,
+			ceiling: { contextWindow: 400_000, api: "azure-openai-responses" },
+		},
 	]);
 	const saved = readFileSync(path, "utf8");
 	expect(saved.startsWith("\uFEFF// keep")).toBe(false);
@@ -200,14 +299,20 @@ test("one bulk save covers API, Codex and proxy providers and leaves ineligible 
 		["configured-proxy", "openai-responses"],
 	]);
 	const result = await setModelContextWindow("available", 600_000);
-	expect(result.map((entry) => [entry.provider, entry.override])).toEqual([
-		["openai", 600_000],
-		["openai-codex", 600_000],
-		["configured-proxy", 600_000],
+	expect(
+		result
+			.filter((entry) => entry.override !== null)
+			.map((entry) => [entry.provider, entry.id, entry.override]),
+	).toEqual([
+		["openai", "gpt-5.5", 600_000],
+		["openai-codex", "gpt-5.5", 600_000],
+		["configured-proxy", "gpt-5.5", 600_000],
 	]);
+	// A window pi already reports above the floor, and a model under the floor with nothing larger
+	// declared, are both left alone.
 	expect(pi.getModel("openai", "gpt-5")?.contextWindow).toBe(400_000);
 	expect(pi.getModel("openai", "gpt-5.5-pro")?.contextWindow).toBe(1_050_000);
-	expect(pi.getModel("other", "claude")?.contextWindow).toBe(272_000);
+	expect(pi.getModel("other", "claude")?.contextWindow).toBe(200_000);
 	expect(config()).toEqual({
 		providers: {
 			openai: { modelOverrides: { "gpt-5.5": { contextWindow: 600_000 } } },
@@ -229,8 +334,11 @@ test("a bulk save from a mixed state replaces every override and bulk Default cl
 		["openai-codex", "openai-codex-responses"],
 		["configured-proxy", "openai-responses"],
 	]);
-	const overrides = (settings: { override: number | null }[]) =>
-		settings.map((entry) => entry.override);
+	const overrides = (settings: ModelContextSetting[]) =>
+		["openai", "openai-codex", "configured-proxy"].map((provider) => {
+			const row = settings.find((entry) => entry.provider === provider && entry.id === ref.id);
+			return row === undefined ? "missing" : row.override;
+		});
 	const effective = () =>
 		["openai", "openai-codex", "configured-proxy"].map(
 			(provider) => pi.getModel(provider, ref.id)?.contextWindow,
@@ -262,8 +370,11 @@ test("shared saves skip overrides outside the app range; only a targeted save ch
 		["openai", "openai-responses"],
 		["openai-codex", "openai-codex-responses"],
 	]);
-	const overrides = (settings: { override: number | null }[]) =>
-		settings.map((entry) => entry.override);
+	const overrides = (settings: ModelContextSetting[]) =>
+		["openai", "openai-codex"].map((provider) => {
+			const row = settings.find((entry) => entry.provider === provider && entry.id === ref.id);
+			return row === undefined ? "missing" : row.override;
+		});
 	expect(overrides(await listModelContextSettings())).toEqual([1_050_000, null]);
 	expect(overrides(await setModelContextWindow("available", 1_000_000))).toEqual([
 		1_050_000, 1_000_000,
@@ -280,7 +391,7 @@ test("budgets outside 272K–1M and unknown targets are refused before touching 
 		await expect(setModelContextWindow(ref, value)).rejects.toThrow("whole number between");
 	}
 	await expect(
-		setModelContextWindow({ provider: "openai", id: "gpt-5" }, 1_000_000),
+		setModelContextWindow({ provider: "openai", id: "not-a-model" }, 1_000_000),
 	).rejects.toThrow("ineligible");
 	await expect(
 		setModelContextWindow({ provider: "other", id: "claude" }, 1_000_000),

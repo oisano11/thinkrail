@@ -135,7 +135,7 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 102;
+export const PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
@@ -163,6 +163,8 @@ export const SUBAGENT_CONCURRENCY_PROTOCOL_VERSION = 79;
 export const WORKSPACE_SETTLE_PROTOCOL_VERSION = 78;
 export const MODEL_PICKER_PROTOCOL_VERSION = 77;
 export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
+/** v103: a setting carries the window a sibling interface declares, and one call fills them all in. */
+export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 103;
 export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
 export const RESOURCE_META_PROTOCOL_VERSION = 75;
 export const REVIEW_RICH_ANCHORS_PROTOCOL_VERSION = 74;
@@ -355,6 +357,7 @@ export const WS_METHODS = {
 	modelDefault: "model.default",
 	modelContextSettings: "model.contextSettings",
 	modelSetContextWindow: "model.setContextWindow",
+	modelApplyContextCeilings: "model.applyContextCeilings",
 	customEndpointsList: "customEndpoints.list",
 	customEndpointsProbe: "customEndpoints.probe",
 	customEndpointsSave: "customEndpoints.save",
@@ -616,9 +619,29 @@ export function isModelContextWindow(value: unknown): value is number {
 
 export type ModelContextTarget = "available" | Pick<WireModel, "provider" | "id">;
 
+/** The largest window any interface of a model declares, and which API declared it. */
+export interface ModelContextCeiling {
+	contextWindow: number;
+	api: string;
+}
+
 export interface ModelContextSetting
 	extends Pick<WireModel, "provider" | "id" | "name" | "contextWindow"> {
 	override: number | null;
+	/**
+	 * The window a sibling interface of the same model declares, when it beats what pi reports for this
+	 * one — a proxy that lists a model without its real capacity. `null` when nothing larger is known.
+	 */
+	ceiling: ModelContextCeiling | null;
+}
+
+/** Whether a stored override can exist at all: the window the model can reach clears the floor. */
+export function isModelContextWritable(
+	setting: Pick<ModelContextSetting, "contextWindow" | "ceiling">,
+): boolean {
+	return (
+		(setting.ceiling?.contextWindow ?? setting.contextWindow) >= MODEL_CONTEXT_WINDOW_LIMITS.min
+	);
 }
 
 /** Provider ids the custom-endpoint form owns in pi's `models.json`; every other provider is left alone. */
@@ -678,9 +701,13 @@ export interface CustomEndpointDraft {
 }
 
 export function isSharedModelContextTarget(
-	setting: Pick<ModelContextSetting, "override">,
+	setting: Pick<ModelContextSetting, "override" | "contextWindow" | "ceiling">,
 ): boolean {
-	return setting.override === null || isModelContextWindow(setting.override);
+	if (!isModelContextWritable(setting)) return false;
+	if (setting.override !== null) return isModelContextWindow(setting.override);
+	// A model pi already reports above the floor needs no override: only one sitting at the floor is
+	// waiting for a window the provider did not report.
+	return setting.contextWindow === MODEL_CONTEXT_WINDOW_LIMITS.min;
 }
 
 /**
@@ -1077,6 +1104,10 @@ export interface WsMethodMap {
 	"model.contextSettings": { params: Record<string, never>; result: ModelContextSetting[] };
 	"model.setContextWindow": {
 		params: { target: ModelContextTarget; contextWindow: number | null };
+		result: ModelContextSetting[];
+	};
+	"model.applyContextCeilings": {
+		params: Record<string, never>;
 		result: ModelContextSetting[];
 	};
 	"customEndpoints.list": { params: Record<string, never>; result: CustomEndpoint[] };

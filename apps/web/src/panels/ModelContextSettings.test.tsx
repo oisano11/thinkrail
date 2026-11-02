@@ -4,7 +4,7 @@ import {
 	type ModelContextSetting,
 } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ModelContextControls } from "./ModelContextSettings";
+import { ModelContextControls, ModelContextRow } from "./ModelContextSettings";
 
 const setting: ModelContextSetting = {
 	provider: "openai",
@@ -12,6 +12,7 @@ const setting: ModelContextSetting = {
 	name: "GPT-5.5",
 	contextWindow: 272_000,
 	override: null,
+	ceiling: null,
 };
 
 function render({
@@ -33,6 +34,7 @@ function render({
 			failed={failed}
 			onChange={() => {}}
 			onRetry={() => {}}
+			onApplyCeilings={() => {}}
 		/>,
 	);
 }
@@ -108,4 +110,48 @@ test("failed reads replace stale controls with an actionable retry", () => {
 test("empty and loading states do not invent eligible models", () => {
 	expect(render({ settings: [] })).not.toContain('type="radio"');
 	expect(render({ settings: null, pending: true })).not.toContain('type="radio"');
+});
+
+test("a window another interface declares larger is offered as one bulk action", () => {
+	const html = render({
+		settings: [
+			{ ...setting, ceiling: { contextWindow: 1_000_000, api: "azure-openai-responses" } },
+			{ ...setting, provider: "context-proxy", id: "gpt-5" },
+		],
+	});
+	expect(html).toContain("1 model can use a larger window");
+	expect(html).toContain('data-testid="context-limit-apply-suggestions"');
+	expect(html).toContain("Apply all");
+});
+
+test("a model whose window cannot be raised offers no bulk action", () => {
+	const html = render({ settings: [{ ...setting, id: "claude", contextWindow: 200_000 }] });
+	expect(html).not.toContain('data-testid="context-limit-apply-suggestions"');
+	expect(html).not.toContain("larger window");
+});
+
+test("a model whose window another interface declares larger offers one-click apply", () => {
+	const html = renderToStaticMarkup(
+		<ModelContextRow
+			model={{ ...setting, ceiling: { contextWindow: 1_000_000, api: "azure-openai-responses" } }}
+			pending={false}
+			onChange={() => {}}
+		/>,
+	);
+	expect(html).toContain('data-testid="context-limit-openai-gpt-5.5"');
+	expect(html).toContain('data-testid="context-limit-openai-gpt-5.5-apply"');
+	expect(html).toContain("Another interface declares 1,000,000");
+});
+
+test("a model that cannot hold the smallest window is listed read-only", () => {
+	const html = renderToStaticMarkup(
+		<ModelContextRow
+			model={{ ...setting, id: "claude", contextWindow: 200_000 }}
+			pending={false}
+			onChange={() => {}}
+		/>,
+	);
+	expect(html).toContain('data-testid="context-limit-openai-claude-read-only"');
+	expect(html).not.toContain('type="radio"');
+	expect(html).toContain("below the 272,000");
 });

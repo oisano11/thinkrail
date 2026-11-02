@@ -233,10 +233,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
   `noteRecentModel` — a default-resolved creation is the host's choice, not the user's, and is not
-  recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
-  adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
-  eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
-  invalidate catalogs across clients. The four `customEndpoints.*` methods delegate to agent's
+  recorded. `model.contextSettings`, `model.setContextWindow` and `model.applyContextCeilings` delegate
+  to agent's `modelContext` adapter and return its `ModelContextSetting[]`; the mutation names a
+  provider/model target or all eligible pairs, never arbitrary model metadata, and successful saves
+  reuse `provider.changed` to invalidate catalogs across clients. The four `customEndpoints.*` methods delegate to agent's
   `customEndpoints` adapter one-to-one; the host adds no state of its own. Existing review chats and plan-review
   subagents keep their own policies — and
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build

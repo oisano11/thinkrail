@@ -64,6 +64,7 @@ export {
 } from "./mcpSignIn";
 export { setModelListingPublisher } from "./modelAvailability";
 export {
+	applyModelContextCeilings,
 	listModelContextSettings,
 	setModelContextWindow,
 } from "./modelContext";

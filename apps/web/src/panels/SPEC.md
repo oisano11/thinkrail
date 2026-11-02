@@ -1085,10 +1085,15 @@ a project picker, the prompt hero, and the reused
   first-available fallback when a saved model is missing; supported effort levels and the displayed effort
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
   picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
-  one Default / 1M / Custom selector over every eligible GPT model the host returns as
-  `ModelContextSetting[]`; a collapsed **By each model** disclosure reveals one selector per provider/model
+  one Default / 1M / Custom selector over every model the host returns as
+  `ModelContextSetting[]`; a collapsed **By each model** disclosure reveals one row per provider/model
   pair, so the same model on
-  different providers stays independently editable. Selection is keyed on the explicit `override`
+  different providers stays independently editable. A row the contracts' `isModelContextWritable`
+  rejects (a window below the range's minimum with no larger sibling) is listed as text — name plus the
+  window and the reason — with no control at all, since offering one would only produce a refused save.
+  A row whose `ceiling` exceeds its current override carries the suggestion as one line plus an **Apply**
+  button, and the global block offers **Apply all** over the same set, so a reader can lift every
+  under-reported window in one `model.applyContextCeilings` call instead of row by row. Selection is keyed on the explicit `override`
   (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
   contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
   differ, counts the external rows it leaves alone, and is omitted when it would govern none — and

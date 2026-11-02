@@ -15,6 +15,7 @@ import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
+	CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
@@ -240,9 +241,17 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
+test("context window ceilings are pinned to v103", () => {
+	expect(CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION).toBe(103);
+	expect(PROTOCOL_VERSION).toBe(103);
+	expect(WS_METHODS.modelApplyContextCeilings).toBe("model.applyContextCeilings");
+	expect(WS_METHODS.modelContextSettings).toBe("model.contextSettings");
+	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
+});
+
 test("user-selectable fonts are pinned to v102", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
-	expect(PROTOCOL_VERSION).toBe(102);
 	expect(WS_METHODS.fontsList).toBe("fonts.list");
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");

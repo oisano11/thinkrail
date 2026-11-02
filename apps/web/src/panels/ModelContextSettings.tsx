@@ -2,6 +2,7 @@ import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	isModelContextWindow,
+	isModelContextWritable,
 	isSharedModelContextTarget,
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	type ModelContextSetting,
@@ -257,6 +258,78 @@ function ContextLimitControl({
 	);
 }
 
+export function ModelContextRow({
+	model,
+	pending,
+	onChange,
+}: {
+	model: ModelContextSetting;
+	pending: boolean;
+	onChange: (target: ModelContextTarget, override: number | null) => void;
+}) {
+	const t = useT();
+	const testId = `context-limit-${model.provider}-${model.id}`;
+	const target = { provider: model.provider, id: model.id };
+	if (!isModelContextWritable(model)) {
+		return (
+			<div className="flex flex-col gap-4" data-testid={`${testId}-read-only`}>
+				<span className="tr-text-ui text-text-default">{model.name}</span>
+				<span className="tr-text-metadata text-text-muted">
+					{t("settings.modelContext.readOnly", {
+						provider: model.provider,
+						tokens: tokens(t, model.contextWindow),
+						min: tokens(t, MODEL_CONTEXT_WINDOW_LIMITS.min),
+					})}
+				</span>
+			</div>
+		);
+	}
+	const ceiling = model.ceiling;
+	return (
+		<div className="flex flex-col gap-4">
+			<ContextLimitControl
+				revision={String(model.override)}
+				label={model.name}
+				controlLabel={`${model.name} (${model.provider})`}
+				description={
+					model.override === null
+						? t("settings.modelContext.modelDescriptionDefault", {
+								provider: model.provider,
+								tokens: tokens(t, model.contextWindow),
+							})
+						: t("settings.modelContext.modelDescription", {
+								provider: model.provider,
+								tokens: tokens(t, model.contextWindow),
+							})
+				}
+				override={model.override}
+				disabled={pending}
+				testId={testId}
+				onChange={(override) => onChange(target, override)}
+			/>
+			{ceiling !== null && ceiling.contextWindow !== model.override ? (
+				<div className="flex items-center gap-8">
+					<span className="flex-1 tr-text-metadata text-text-muted">
+						{t("settings.modelContext.suggestion", {
+							tokens: tokens(t, ceiling.contextWindow),
+							api: ceiling.api,
+						})}
+					</span>
+					<Button
+						variant="ghost"
+						size="s"
+						disabled={pending}
+						data-testid={`${testId}-apply`}
+						onClick={() => onChange(target, ceiling.contextWindow)}
+					>
+						{t("settings.modelContext.apply")}
+					</Button>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 export function ModelContextControls({
 	protocolVersion,
 	settings,
@@ -264,6 +337,7 @@ export function ModelContextControls({
 	failed,
 	onChange,
 	onRetry,
+	onApplyCeilings,
 }: {
 	protocolVersion: number | null;
 	settings: ModelContextSetting[] | null;
@@ -271,12 +345,17 @@ export function ModelContextControls({
 	failed: boolean;
 	onChange: (target: ModelContextTarget, override: number | null) => void;
 	onRetry: () => void;
+	onApplyCeilings: () => void;
 }) {
 	const t = useT();
 	const [expanded, setExpanded] = useState(false);
 	const rowsId = useId();
 	if (!supported(protocolVersion)) return null;
 	const shared = settings?.filter(isSharedModelContextTarget) ?? [];
+	const suggested =
+		settings?.filter(
+			(model) => model.ceiling !== null && model.override !== model.ceiling.contextWindow,
+		).length ?? 0;
 	const external = (settings?.length ?? 0) - shared.length;
 	const first = shared[0]?.override;
 	const sharedOverride = shared.every((model) => model.override === first) ? first : undefined;
@@ -336,6 +415,22 @@ export function ModelContextControls({
 						<p className="rounded-sm bg-control-bg px-12 py-8 tr-text-metadata text-text-muted">
 							{t("settings.modelContext.note")}
 						</p>
+						{suggested > 0 ? (
+							<div className="flex items-center gap-8">
+								<span className="flex-1 tr-text-metadata text-text-muted">
+									{t("settings.modelContext.suggested", { count: suggested })}
+								</span>
+								<Button
+									variant="outline"
+									size="s"
+									disabled={pending}
+									data-testid="context-limit-apply-suggestions"
+									onClick={onApplyCeilings}
+								>
+									{t("settings.modelContext.applySuggestions")}
+								</Button>
+							</div>
+						) : null}
 					</div>
 
 					<div className="flex flex-col border-border-muted border-b">
@@ -361,28 +456,11 @@ export function ModelContextControls({
 						{expanded && (
 							<div id={rowsId} className="flex flex-col gap-16 pb-12">
 								{settings.map((model) => (
-									<ContextLimitControl
+									<ModelContextRow
 										key={`${model.provider}/${model.id}`}
-										revision={String(model.override)}
-										label={model.name}
-										controlLabel={`${model.name} (${model.provider})`}
-										description={
-											model.override === null
-												? t("settings.modelContext.modelDescriptionDefault", {
-														provider: model.provider,
-														tokens: tokens(t, model.contextWindow),
-													})
-												: t("settings.modelContext.modelDescription", {
-														provider: model.provider,
-														tokens: tokens(t, model.contextWindow),
-													})
-										}
-										override={model.override}
-										disabled={pending}
-										testId={`context-limit-${model.provider}-${model.id}`}
-										onChange={(override) =>
-											onChange({ provider: model.provider, id: model.id }, override)
-										}
+										model={model}
+										pending={pending}
+										onChange={onChange}
 									/>
 								))}
 							</div>
@@ -403,19 +481,15 @@ export function ModelContextSettings() {
 	const [failed, setFailed] = useState(false);
 	const sequence = useRef(0);
 
-	const synchronize = useCallback(
-		async (change?: WsMethodMap["model.setContextWindow"]["params"]) => {
-			if (!supported(protocolVersion)) return;
+	const send = useCallback(
+		async (request: () => Promise<ModelContextSetting[]>, reportFailure: boolean) => {
 			const current = ++sequence.current;
 			setPending(true);
-			const request = change
-				? () => getTransport().request("model.setContextWindow", change)
-				: () => getTransport().request("model.contextSettings", {});
 			let next: ModelContextSetting[] | undefined;
 			try {
 				next = await request();
 			} catch {}
-			if (next === undefined && change)
+			if (next === undefined && reportFailure)
 				toast.error(translate("settings.modelContext.updateFailed"));
 			if (current !== sequence.current) return;
 			if (next === undefined) setFailed(true);
@@ -425,8 +499,26 @@ export function ModelContextSettings() {
 			}
 			setPending(false);
 		},
-		[protocolVersion, providerVersion],
+		[providerVersion],
 	);
+
+	const synchronize = useCallback(
+		(change?: WsMethodMap["model.setContextWindow"]["params"]) => {
+			if (!supported(protocolVersion)) return;
+			return send(
+				change
+					? () => getTransport().request("model.setContextWindow", change)
+					: () => getTransport().request("model.contextSettings", {}),
+				change !== undefined,
+			);
+		},
+		[protocolVersion, send],
+	);
+
+	const applyCeilings = useCallback(() => {
+		if (!supported(protocolVersion)) return;
+		return send(() => getTransport().request("model.applyContextCeilings", {}), true);
+	}, [protocolVersion, send]);
 
 	useEffect(() => {
 		void synchronize();
@@ -442,6 +534,7 @@ export function ModelContextSettings() {
 			pending={pending}
 			failed={failed}
 			onRetry={() => void synchronize()}
+			onApplyCeilings={() => void applyCeilings()}
 			onChange={(target, override) => {
 				if (pending) return;
 				void synchronize({ target, contextWindow: override });

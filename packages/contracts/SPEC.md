@@ -659,14 +659,22 @@ the palette ranks with — kept here so host-side search can rank with the same 
   available, otherwise the first model in the host's settled available list, otherwise `null`; effort is
   `defaultEffort ?? "medium"`, clamped with Pi's `clampThinkingLevel` when a model exists) /
   **`model.contextSettings`** / **`model.setContextWindow`** (v76; both return
-  **`ModelContextSetting[]`** — the eligible OpenAI models' `provider`/`id`/`name`, pi's effective
-  `contextWindow`, and the explicit models.json `override` or `null` for pi's default. The mutation takes
+  **`ModelContextSetting[]`** — every available model's `provider`/`id`/`name`, pi's effective
+  `contextWindow`, the explicit models.json `override` or `null` for pi's default, and at v103 a
+  **`ceiling`**: the largest window any other interface of the same model declares, with the `api` that
+  declares it, or `null` when nothing declares more. A setting whose window — its ceiling when one
+  exists, otherwise pi's value — falls below the range's minimum is listed read-only, since
+  **`isModelContextWritable`** is what a control must check before offering a change; the ceiling is
+  derived from pi's catalog and the registered providers, never from a model-id table. **`model.applyContextCeilings`**
+  (v103) takes no parameters, writes the ceiling onto every writable row that has no override yet, and
+  returns the same array, so one call fills the whole list in. The mutation takes
   `{target: "available" | {provider,id}, contextWindow: number | null}`: `null` removes the override;
   a number must satisfy **`isModelContextWindow`** within **`MODEL_CONTEXT_WINDOW_LIMITS`**
   (272,000–1,000,000), the app's editing policy rather than a verified provider capacity, enforced on
   both sides. External values outside it are read without clamping, and the `available` target covers
-  only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
-  override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
+  only settings **`isSharedModelContextTarget`** accepts (writable, and no override or one inside the
+  range): an override the app could not have written is changed only by naming its `{provider,id}`, and a
+  named target that cannot hold the requested window is refused rather than clamped. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
   **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
   **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible

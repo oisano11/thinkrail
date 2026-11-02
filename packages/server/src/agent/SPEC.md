@@ -140,14 +140,21 @@ re-opened transcripts provider-valid.
     interleave), and the `provider.changed` publisher seam (`setModelsFilePublisher`). Error messages are
     generic and never carry file contents.
   - `modelContext` — a narrow settings adapter for the `contextWindow` override in pi's shared
-    `models.json`, not a second model registry. It lists the OpenAI Responses / Codex
-    Responses models from `settledAvailableModels` whose effective budget still equals the contracts'
-    272K editing minimum (the cap this setting exists to lift), plus any model that already carries an
-    override so it can always be reverted; each entry pairs pi's effective `contextWindow` with the
-    file's explicit `override` (`null` = pi default). Eligibility is derived from pi's catalog, never
-    from a model-id list, so catalog defaults above 1M stay untouched by a bulk save. A save validates
+    `models.json`, not a second model registry. It lists **every** model `settledAvailableModels` returns,
+    whatever its API — the cap this setting lifts is a property of the budget, not of one wire format — and
+    each entry pairs pi's effective `contextWindow` with the file's explicit `override` (`null` = pi
+    default) and with a `ceiling`: the largest `contextWindow` any other interface of the same model id
+    declares, taken from the registered providers and from pi's built-in catalog, plus the `api` that
+    declares it, or `null` when none declares more. A ceiling is only a suggestion the reader applies; it
+    never rewrites a file by itself, and a model whose window stays below the contracts' minimum with no
+    larger sibling is listed read-only (`isModelContextWritable` false) rather than offered a control.
+    `applyModelContextCeilings` writes every such ceiling onto the writable rows that have no override
+    yet, in the same single save, so the whole list can be filled in one call. Eligibility is derived
+    from pi's catalog, never from a model-id list, so catalog defaults above 1M stay untouched by a bulk
+    save. A save validates
     the contracts' 272K–1M range first, patches `providers.<p>.modelOverrides.<id>.contextWindow` for the
-    target — or, for `available`, every eligible pair the contracts' `isSharedModelContextTarget` admits, so
+    target — or, for `available`, every eligible pair the contracts' `isSharedModelContextTarget` admits
+    (a named target whose window cannot hold the request is refused, not clamped), so
     a shared save never rewrites an override outside the range that only a targeted save can touch — and
     prunes override objects it empties (never `providers`), writing through `modelsFile`; a changed file is followed by one
     network-disabled `runtime.refresh` on the current generation and the host's `provider.changed`

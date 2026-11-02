@@ -23,6 +23,7 @@ import {
 	abortSession,
 	acknowledgeCompletion,
 	admissionContextFor,
+	applyModelContextCeilings,
 	applyPiResourceTrust,
 	cancelMcpProbe,
 	clampThinkingForModel,
@@ -1271,6 +1272,7 @@ const handlers: WsHandlers = {
 	"model.setContextWindow": (p) => {
 		return setModelContextWindow(p.target, p.contextWindow);
 	},
+	"model.applyContextCeilings": () => applyModelContextCeilings(),
 	"customEndpoints.list": () => listCustomEndpoints(),
 	"customEndpoints.probe": (p) => probeCustomEndpoint(p),
 	"customEndpoints.save": (p) => saveCustomEndpoint(p),
