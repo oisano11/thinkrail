@@ -88,8 +88,17 @@ jobs:
 
           sha=$(git rev-parse --verify "upstream/${REQUESTED}^{commit}" 2>/dev/null \
             || git rev-parse --verify "${REQUESTED}^{commit}")
-          # The nearest release tag at or below the built commit: the version's base.
-          base=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$sha" 2>/dev/null || echo "v0.0.0")
+          # The newest release tag at or below the built commit: the version's base. `git describe`
+          # answers "nearest", which picks a stable tag over a newer nightly one and makes the feed
+          # go backwards; `Bun.semver.order` ranks them the way the updater does.
+          base=$(git tag --merged "$sha" -l 'v[0-9]*' | sed 's/^v//' | bun -e '
+            const tags = (await Bun.stdin.text()).split("\n").map((t) => t.trim()).filter(Boolean);
+            // A bare "*" range never matches a prerelease, which is most of what this feed builds.
+            const valid = tags.filter((t) => /^\d+\.\d+\.\d+/.test(t));
+            valid.sort(Bun.semver.order);
+            console.log(valid.at(-1) ?? "0.0.0");
+          ')
+          base="v${base#v}"
           echo "ref=$REQUESTED" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "base=${base#v}" >> "$GITHUB_OUTPUT"
@@ -118,6 +127,17 @@ jobs:
           case "$published_version" in
             "${BASE}-zh."*) serial=$(( ${published_version##*-zh.} + 1 )) ;;
           esac
+
+          # The feed must only move forward: an app that already installed a newer build never looks
+          # back, so a lower version would silently strand every reader on the old one.
+          if [ -n "$published_version" ]; then
+            order=$(bun -e 'console.log(Bun.semver.order(process.argv[1], process.argv[2]))' \
+              "${BASE}-zh.${serial}" "$published_version")
+            if [ "$order" -le 0 ]; then
+              echo "::error::${BASE}-zh.${serial} is not newer than the published ${published_version}"
+              exit 1
+            fi
+          fi
 
           echo "rebuild=true" >> "$GITHUB_OUTPUT"
           echo "version=${BASE}-zh.${serial}" >> "$GITHUB_OUTPUT"
