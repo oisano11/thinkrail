@@ -157,12 +157,24 @@ jobs:
         run: |
           set -euo pipefail
           git checkout -B zh "origin/zh"
+          ours=$(git rev-parse HEAD)
           if git merge-base --is-ancestor "$SHA" HEAD; then
             echo "upstream $REF is already an ancestor of the branch"
           elif ! git merge --no-ff --no-edit -m "chore: merge upstream ${REF} (${SHA:0:7})" "$SHA"; then
             git merge --abort || true
             echo "conflict=true" >> "$GITHUB_OUTPUT"
             exit 0
+          else
+            # The Actions token may not create or update workflow files, so this repository keeps
+            # its own `.github/`: upstream's automation is not what builds this feed, and dropping
+            # its changes is what keeps the push below allowed.
+            while IFS= read -r added; do
+              [ -n "$added" ] && git rm -q -f -- "$added"
+            done < <(git diff --name-only --diff-filter=A "$ours" HEAD -- .github)
+            git checkout "$ours" -- .github
+            if ! git diff --cached --quiet; then
+              git commit -q --amend --no-edit
+            fi
           fi
           echo "conflict=false" >> "$GITHUB_OUTPUT"
 
