@@ -13,8 +13,9 @@ name: publish-zh
 # the branch, so upstream merges never conflict on version.ts.
 on:
   schedule:
-    # Daily, off-peak for the upstream project (03:17 UTC).
-    - cron: "17 3 * * *"
+    # Every six hours. A run whose upstream commit is already published exits before it installs
+    # anything, so the extra slots cost a checkout each and only build when upstream moved.
+    - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       upstream_ref:
