@@ -193,11 +193,13 @@ jobs:
           title="publish-zh: merging upstream ${REF} conflicts"
           body=$(printf 'The build could not merge upstream `%s` (`%s`).\n\nResolve it on the `zh` branch, then re-run this workflow.\n\n- run: %s/%s/actions/runs/%s\n' \
             "$REF" "$SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
-          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // ""')
+          # Issues are disabled on this fork, so a conflict must still fail with the reason in the
+          # log rather than on a failed attempt to file a report.
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // ""' 2>/dev/null || true)
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "$body"
-          else
-            gh issue create --title "$title" --body "$body"
+            gh issue comment "$existing" --body "$body" || true
+          elif ! gh issue create --title "$title" --body "$body"; then
+            echo "::warning::could not file a conflict report; the run log carries the merge output above"
           fi
           echo "::error::upstream $REF conflicts with the local customisations"
           exit 1

@@ -25,6 +25,7 @@ import {
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
+	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
@@ -241,9 +242,9 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
-test("context window ceilings are pinned to v103", () => {
-	expect(CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION).toBe(103);
-	expect(PROTOCOL_VERSION).toBe(103);
+test("context window ceilings are pinned to v104", () => {
+	expect(CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION).toBe(104);
+	expect(PROTOCOL_VERSION).toBe(104);
 	expect(WS_METHODS.modelApplyContextCeilings).toBe("model.applyContextCeilings");
 	expect(WS_METHODS.modelContextSettings).toBe("model.contextSettings");
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
@@ -252,6 +253,7 @@ test("context window ceilings are pinned to v103", () => {
 test("user-selectable fonts are pinned to v102", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
 	expect(FONTS_PROTOCOL_VERSION).toBe(102);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FONTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fontsList).toBe("fonts.list");
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");
@@ -323,6 +325,12 @@ test("project create and the onboarding dismissal are pinned to v94", () => {
 	expect(WS_METHODS.projectCreate).toBe("project.create");
 	expect(WS_METHODS.providerDetect).toBe("provider.detect");
 	expect(DEFAULT_CONFIG.onboardingDismissed).toBe(false);
+});
+
+test("the GitHub star ask is pinned to v103", () => {
+	expect(GITHUB_STAR_PROTOCOL_VERSION).toBe(103);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(GITHUB_STAR_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.feedbackGithubStar).toBe("feedback.githubStar");
 });
 
 test("in-app surveys are pinned to v97", () => {

@@ -135,7 +135,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 103;
+export const PROTOCOL_VERSION = 104;
+export const GITHUB_STAR_PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
 export const PI_PACKAGES_PROTOCOL_VERSION = 100;
@@ -163,8 +164,8 @@ export const SUBAGENT_CONCURRENCY_PROTOCOL_VERSION = 79;
 export const WORKSPACE_SETTLE_PROTOCOL_VERSION = 78;
 export const MODEL_PICKER_PROTOCOL_VERSION = 77;
 export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
-/** v103: a setting carries the window a sibling interface declares, and one call fills them all in. */
-export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 103;
+/** v104: a setting carries the window a sibling interface declares, and one call fills them all in. */
+export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 104;
 export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
 export const RESOURCE_META_PROTOCOL_VERSION = 75;
 export const REVIEW_RICH_ANCHORS_PROTOCOL_VERSION = 74;
@@ -436,6 +437,7 @@ export const WS_CHANNELS = {
 	settingsChanged: "settings.changed",
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
+	feedbackGithubStar: "feedback.githubStar",
 	reviewChanged: "review.changed",
 	reviewFailed: "review.failed",
 	turnChanged: "turn.changed",
