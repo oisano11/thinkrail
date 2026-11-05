@@ -53,7 +53,10 @@ jobs:
   publish:
     # macos-15 is arm64 on public repositories, and arm64 is the only desktop target this
     # fork builds.
-    runs-on: macos-14
+    # macOS 15 is the arm64 image: macOS 14 was retired on 2 November 2026 and now fails the job
+    # outright ("configuration 'macos-14-arm64-us-default' is not supported"), and an x64 image
+    # would produce an app the feed's arm64 manifest can never install.
+    runs-on: macos-15
     steps:
       - name: Check out the fork branch
         uses: actions/checkout@v4
