@@ -64,6 +64,11 @@ import type {
 	ReviewCommentStatus,
 	ReviewFixDetails,
 	ReviewSnapshot,
+	SearchContext,
+	SearchKind,
+	SearchPreviewResult,
+	SearchPreviewTarget,
+	SearchQueryResult,
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
@@ -135,7 +140,12 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 104;
+export const PROTOCOL_VERSION = 107;
+export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 107;
+export const SEARCH_PROTOCOL_VERSION = 106;
+export const WORKSPACE_CREATION_PROTOCOL_VERSION = 104;
+export const EXTENSION_SETTINGS_PROTOCOL_VERSION = 105;
+export const ASK_DISCUSS_PROTOCOL_VERSION = 105;
 export const GITHUB_STAR_PROTOCOL_VERSION = 103;
 export const FONTS_PROTOCOL_VERSION = 102;
 export const CUSTOM_ENDPOINTS_PROTOCOL_VERSION = 101;
@@ -165,7 +175,7 @@ export const WORKSPACE_SETTLE_PROTOCOL_VERSION = 78;
 export const MODEL_PICKER_PROTOCOL_VERSION = 77;
 export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
 /** v104: a setting carries the window a sibling interface declares, and one call fills them all in. */
-export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 104;
+
 export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
 export const RESOURCE_META_PROTOCOL_VERSION = 75;
 export const REVIEW_RICH_ANCHORS_PROTOCOL_VERSION = 74;
@@ -220,6 +230,38 @@ export interface WorkspaceRemoved {
 	id: string;
 }
 
+export type WorkspaceCreationState = "running" | "interrupted" | "failed";
+export type WorkspaceCreationPhase = "preparing" | "checking-out";
+
+export interface WorkspaceKickoff {
+	text: string;
+	images?: ImageContent[];
+	model?: WireModel;
+	thinkingLevel?: ThinkingLevel;
+}
+
+export interface WorkspaceCreation {
+	id: string;
+	projectId: string;
+	name: string;
+	branch: string;
+	baseBranch: string;
+	state: WorkspaceCreationState;
+	phase: WorkspaceCreationPhase;
+	progress?: { done: number; total: number };
+	failure?: { message: string; code?: string; cleanedUp?: true };
+	kickoff?: { text: string; imageCount: number };
+	startedAt: number;
+}
+
+export interface WorkspaceCreationRemoved {
+	id: string;
+	projectId: string;
+	workspace?: Workspace;
+	sessionId?: string;
+	kickoffError?: string;
+}
+
 export type SessionCreatedPayload = SessionSummary;
 
 export interface SessionDeletedPayload {
@@ -247,6 +289,10 @@ export const WS_METHODS = {
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
+	workspaceStartCreate: "workspace.startCreate",
+	workspaceListCreations: "workspace.listCreations",
+	workspaceRetryCreation: "workspace.retryCreation",
+	workspaceDismissCreation: "workspace.dismissCreation",
 	workspaceRename: "workspace.rename",
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
@@ -386,6 +432,8 @@ export const WS_METHODS = {
 	feedbackSurveySubmit: "feedback.survey.submit",
 	clientReportError: "client.reportError",
 	historySearch: "history.search",
+	searchQuery: "search.query",
+	searchPreview: "search.preview",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
 	reviewCommentUpdate: "review.commentUpdate",
@@ -434,6 +482,8 @@ export const WS_CHANNELS = {
 	workspaceUpdated: "workspace.updated",
 	workspaceRemoved: "workspace.removed",
 	workspaceFsChanged: "workspace.fsChanged",
+	workspaceCreationChanged: "workspace.creationChanged",
+	workspaceCreationRemoved: "workspace.creationRemoved",
 	settingsChanged: "settings.changed",
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
@@ -762,6 +812,16 @@ export interface WsMethodMap {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
 	};
+	"workspace.startCreate": {
+		params: { projectId: string; name?: string; baseRef?: string; kickoff?: WorkspaceKickoff };
+		result: WorkspaceCreation;
+	};
+	"workspace.listCreations": { params: Record<string, never>; result: WorkspaceCreation[] };
+	"workspace.retryCreation": { params: { id: string }; result: WorkspaceCreation };
+	"workspace.dismissCreation": {
+		params: { id: string };
+		result: { kickoff?: WorkspaceKickoff };
+	};
 	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
 	"workspace.listExisting": {
 		params: { projectId: string };
@@ -868,7 +928,7 @@ export interface WsMethodMap {
 	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": {
-		params: { workspaceId: string; path: string };
+		params: { workspaceId: string; path: string; maxBytes?: number };
 		result: { content: string; meta: ResourceMeta };
 	};
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
@@ -1150,6 +1210,16 @@ export interface WsMethodMap {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
 	};
+	"search.query": {
+		params: {
+			query: string;
+			kinds?: SearchKind[];
+			context: SearchContext;
+			limit?: number;
+		};
+		result: SearchQueryResult;
+	};
+	"search.preview": { params: SearchPreviewTarget; result: SearchPreviewResult };
 	"review.get": { params: { workspaceId: string }; result: ReviewSnapshot };
 	"review.commentAdd": {
 		params: {
@@ -1327,7 +1397,12 @@ export type WsErrorCode =
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
-	| "GIT_TIMEOUT";
+	| "GIT_TIMEOUT"
+	| "WORKTREE_ADD_FAILED"
+	| "WORKTREE_CHECKOUT_FAILED"
+	| "WORKTREE_CHECKOUT_STALLED"
+	| "WORKSPACE_PATH_TAKEN"
+	| "FILE_TOO_LARGE";
 
 export interface WsResponse {
 	id: string;
