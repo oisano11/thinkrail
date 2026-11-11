@@ -106,6 +106,7 @@ import type {
 	WireCustomMessage,
 	WireModel,
 } from "./piProtocol";
+import type { SpeechErrorCode, SpeechModel, SpeechStatus } from "./speech";
 
 export interface TerminalDataPush {
 	id: string;
@@ -140,8 +141,16 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 107;
-export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 107;
+export const PROTOCOL_VERSION = 115;
+export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 115;
+export const QUESTION_PANEL_PROTOCOL_VERSION = 114;
+export const SPEC_SECTIONS_PROTOCOL_VERSION = 113;
+export const TEXT_SEARCH_PROTOCOL_VERSION = 112;
+export const CACHE_WARMING_SETTINGS_PROTOCOL_VERSION = 111;
+export const CONTINUATION_PROTOCOL_VERSION = 110;
+export const CHATS_PROTOCOL_VERSION = 109;
+export const OTHER_AGENT_SKILLS_PROTOCOL_VERSION = 108;
+export const SPEECH_PROTOCOL_VERSION = 107;
 export const SEARCH_PROTOCOL_VERSION = 106;
 export const WORKSPACE_CREATION_PROTOCOL_VERSION = 104;
 export const EXTENSION_SETTINGS_PROTOCOL_VERSION = 105;
@@ -223,7 +232,112 @@ export interface ServerWelcome {
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
+	/** Voice input state, from `SPEECH_PROTOCOL_VERSION`; later changes arrive on `speech.changed`. */
+	speech?: SpeechStatus;
 }
+
+/** A projectless chat: its `kind: "chat"` workspace in the Chats container plus the one session it owns. */
+export interface ChatCreateResult {
+	workspace: Workspace;
+	sessionId: string;
+	model: WireModel | null;
+	thinkingLevel: ThinkingLevel;
+}
+
+/** What deleting a chat would trash besides its transcripts: the files its folder holds (bounded count). */
+export interface ChatInspection {
+	files: number;
+	/** The walk stopped at its entry or time budget; the folder may hold more. */
+	truncated: boolean;
+}
+
+export type ChatContinuationPhase =
+	| "requested"
+	| "summarizing"
+	| "creating"
+	| "started"
+	| "failed"
+	| "lost";
+
+/**
+ * Continue in workspace: one in-memory operation per user gesture. The source chat's agent writes the
+ * summary and calls `continue_in_workspace`; the host creates the workspace, its chat and the handoff.
+ */
+export interface ChatContinuation {
+	operationId: string;
+	sourceWorkspaceId: string;
+	sourceSessionId: string;
+	projectId: string;
+	phase: ChatContinuationPhase;
+	workspaceId?: string;
+	sessionId?: string;
+	/** Reported apart from the phase: the handoff reached the new chat, or it did not. */
+	firstMessage?: "sent" | "failed";
+	reason?: string;
+}
+
+export const CONTINUE_IN_WORKSPACE_REQUEST_CUSTOM_TYPE = "continue-in-workspace-request";
+
+export interface ContinueInWorkspaceRequestDetails {
+	operationId: string;
+	projectId: string;
+	projectName: string;
+}
+
+/** The host's request to the source chat's agent: write the summary and hand over — a card, never a user turn. */
+export interface ContinueInWorkspaceRequestMessage
+	extends WireCustomMessage<ContinueInWorkspaceRequestDetails> {
+	customType: typeof CONTINUE_IN_WORKSPACE_REQUEST_CUSTOM_TYPE;
+	display: true;
+	details: ContinueInWorkspaceRequestDetails;
+}
+
+export function isContinueInWorkspaceRequestMessage(
+	message: unknown,
+): message is ContinueInWorkspaceRequestMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== CONTINUE_IN_WORKSPACE_REQUEST_CUSTOM_TYPE)
+		return false;
+	const d = m.details as Partial<ContinueInWorkspaceRequestDetails> | undefined;
+	return (
+		typeof d?.operationId === "string" &&
+		typeof d.projectId === "string" &&
+		typeof d.projectName === "string"
+	);
+}
+
+export const CHAT_HANDOFF_CUSTOM_TYPE = "chat-handoff";
+
+export interface ChatHandoffDetails {
+	operationId: string;
+	sourceWorkspaceId: string;
+	sourceSessionId: string;
+	sourceTitle?: string;
+	summary: string;
+}
+
+/** The new workspace chat's first message: the summary plus a link back to the chat it continues. */
+export interface ChatHandoffMessage extends WireCustomMessage<ChatHandoffDetails> {
+	customType: typeof CHAT_HANDOFF_CUSTOM_TYPE;
+	display: true;
+	details: ChatHandoffDetails;
+}
+
+export function isChatHandoffMessage(message: unknown): message is ChatHandoffMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== CHAT_HANDOFF_CUSTOM_TYPE) return false;
+	const d = m.details as Partial<ChatHandoffDetails> | undefined;
+	return (
+		typeof d?.operationId === "string" &&
+		typeof d.sourceWorkspaceId === "string" &&
+		typeof d.sourceSessionId === "string" &&
+		typeof d.summary === "string"
+	);
+}
+
+export const CHAT_HANDOFF_SUMMARY_MAX_LENGTH = 4000;
 
 export interface WorkspaceRemoved {
 	projectId: string;
@@ -307,6 +421,11 @@ export const WS_METHODS = {
 	workspaceSetSubagentsOverride: "workspace.setSubagentsOverride",
 	workspaceSetSubagentMaxConcurrent: "workspace.setSubagentMaxConcurrent",
 	workspaceSetDiffBase: "workspace.setDiffBase",
+	chatCreate: "chat.create",
+	chatDelete: "chat.delete",
+	chatInspect: "chat.inspect",
+	chatContinue: "chat.continue",
+	chatContinuationStatus: "chat.continuationStatus",
 	workspaceSettle: "workspace.settle",
 	workspaceUnsettle: "workspace.unsettle",
 	workspaceMarkUnread: "workspace.markUnread",
@@ -367,6 +486,9 @@ export const WS_METHODS = {
 	fontsList: "fonts.list",
 	fontsInstalled: "fonts.installed",
 	fontsReveal: "fonts.reveal",
+	speechInstall: "speech.install",
+	speechCancelInstall: "speech.cancelInstall",
+	speechRemove: "speech.remove",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -405,6 +527,8 @@ export const WS_METHODS = {
 	modelContextSettings: "model.contextSettings",
 	modelSetContextWindow: "model.setContextWindow",
 	modelApplyContextCeilings: "model.applyContextCeilings",
+	cacheWarmingGet: "cacheWarming.get",
+	cacheWarmingSet: "cacheWarming.set",
 	customEndpointsList: "customEndpoints.list",
 	customEndpointsProbe: "customEndpoints.probe",
 	customEndpointsSave: "customEndpoints.save",
@@ -434,6 +558,7 @@ export const WS_METHODS = {
 	historySearch: "history.search",
 	searchQuery: "search.query",
 	searchPreview: "search.preview",
+	searchText: "search.text",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
 	reviewCommentUpdate: "review.commentUpdate",
@@ -484,6 +609,8 @@ export const WS_CHANNELS = {
 	workspaceFsChanged: "workspace.fsChanged",
 	workspaceCreationChanged: "workspace.creationChanged",
 	workspaceCreationRemoved: "workspace.creationRemoved",
+	chatContinuation: "chat.continuation",
+	searchTextResults: "search.textResults",
 	settingsChanged: "settings.changed",
 	hostUpdateAvailable: "host.updateAvailable",
 	feedbackInterview: "feedback.interview",
@@ -496,6 +623,7 @@ export const WS_CHANNELS = {
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
 	fontsChanged: "fonts.changed",
+	speechChanged: "speech.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -696,6 +824,20 @@ export function isModelContextWritable(
 	);
 }
 
+/** Pi's `cacheWarming` setting: `off`, `streaming` (only while a run is active) or `idle` (also between runs). */
+export const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const;
+export type CacheWarmingMode = (typeof CACHE_WARMING_MODES)[number];
+
+export function isCacheWarmingMode(value: unknown): value is CacheWarmingMode {
+	return typeof value === "string" && (CACHE_WARMING_MODES as readonly string[]).includes(value);
+}
+
+/** The effective mode and whether pi's `settings.json` names it (`user`) or ThinkRail's default applies. */
+export interface CacheWarmingSetting {
+	mode: CacheWarmingMode;
+	source: "user" | "default";
+}
+
 /** Provider ids the custom-endpoint form owns in pi's `models.json`; every other provider is left alone. */
 export const CUSTOM_ENDPOINT_ID_PREFIX = "custom-";
 
@@ -852,6 +994,17 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
+	"chat.create": {
+		params: { model?: WireModel; thinkingLevel?: ThinkingLevel };
+		result: ChatCreateResult;
+	};
+	"chat.delete": { params: { workspaceId: string }; result: Ack };
+	"chat.inspect": { params: { workspaceId: string }; result: ChatInspection };
+	"chat.continue": {
+		params: { workspaceId: string; projectId: string };
+		result: { operationId: string };
+	};
+	"chat.continuationStatus": { params: { operationId: string }; result: ChatContinuation };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	"workspace.setSkillOverride": {
 		params: { id: string; name: string; override: "on" | "off" | null };
@@ -1023,7 +1176,7 @@ export interface WsMethodMap {
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
-	"packages.list": { params: { workspaceId?: string }; result: PiPackagesCatalog };
+	"packages.list": { params: { workspaceId?: string; force?: boolean }; result: PiPackagesCatalog };
 	"packages.install": {
 		params: { source: string; scope: PiPackageScope; workspaceId?: string };
 		result: PiPackageSummary;
@@ -1058,6 +1211,9 @@ export interface WsMethodMap {
 	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
 	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
 	"fonts.reveal": { params: Record<string, never>; result: Ack };
+	"speech.install": { params: { model: SpeechModel }; result: Ack };
+	"speech.cancelInstall": { params: Record<string, never>; result: Ack };
+	"speech.remove": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
@@ -1172,6 +1328,8 @@ export interface WsMethodMap {
 		params: Record<string, never>;
 		result: ModelContextSetting[];
 	};
+	"cacheWarming.get": { params: Record<string, never>; result: CacheWarmingSetting };
+	"cacheWarming.set": { params: { mode: CacheWarmingMode }; result: CacheWarmingSetting };
 	"customEndpoints.list": { params: Record<string, never>; result: CustomEndpoint[] };
 	"customEndpoints.probe": { params: CustomEndpointProbeRequest; result: CustomEndpointProbe };
 	"customEndpoints.save": { params: CustomEndpointDraft; result: CustomEndpoint[] };
@@ -1220,6 +1378,16 @@ export interface WsMethodMap {
 		result: SearchQueryResult;
 	};
 	"search.preview": { params: SearchPreviewTarget; result: SearchPreviewResult };
+	"search.text": {
+		params: {
+			seq: number;
+			query: string;
+			context: SearchContext;
+			caseSensitive: boolean;
+			wholeWord: boolean;
+		};
+		result: { seq: number; superseded?: true };
+	};
 	"review.get": { params: { workspaceId: string }; result: ReviewSnapshot };
 	"review.commentAdd": {
 		params: {
@@ -1395,6 +1563,7 @@ export type WsErrorCode =
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
+	| "CACHE_WARMING_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
 	| "GIT_TIMEOUT"
@@ -1402,7 +1571,19 @@ export type WsErrorCode =
 	| "WORKTREE_CHECKOUT_FAILED"
 	| "WORKTREE_CHECKOUT_STALLED"
 	| "WORKSPACE_PATH_TAKEN"
-	| "FILE_TOO_LARGE";
+	| "FILE_TOO_LARGE"
+	| "CHATS_CONTAINER"
+	| "CHAT_WORKSPACE"
+	| "CHATS_STORE_UNAVAILABLE"
+	| "NOT_A_CHAT"
+	| "CHAT_HAS_SESSION"
+	| "CHAT_DELETING"
+	| "CHAT_DELETION_PENDING"
+	| "CONTINUATION_UNKNOWN"
+	| "CONTINUATION_IN_FLIGHT"
+	| "TEXT_SEARCH_TIMEOUT"
+	| "TEXT_SEARCH_FAILED"
+	| SpeechErrorCode;
 
 export interface WsResponse {
 	id: string;

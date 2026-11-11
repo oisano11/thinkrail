@@ -12,12 +12,12 @@ import {
 	readFontScale,
 	writeFontScale,
 } from "../styles/fontScale";
-import { SETTINGS_RANGE_INPUT, SETTINGS_RANGE_STACKED, SettingsRangeTrack } from "./SettingsRange";
+import { SETTINGS_RANGE_INPUT, SettingsRangeTrack } from "./SettingsRange";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 
 /** The track is drawn as segments, one per step, so the filled part lands on the current step. */
 const FONT_SCALE_SEGMENTS = Array.from({ length: 16 }, (_, index) => (index * 100) / 16);
-const FONT_SCALE_THUMB = cn(SETTINGS_RANGE_STACKED, SETTINGS_RANGE_INPUT);
+const FONT_SCALE_THUMB = SETTINGS_RANGE_INPUT;
 
 /**
  * Text above the slider grows with the scale and would push the slider out of the settings pane
