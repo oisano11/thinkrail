@@ -6,11 +6,13 @@ name: publish-zh
 # the official ones — and the official app keeps updating itself beside it, because this
 # build carries its own bundle name (`ThinkRail-ZH`) and identifier (`ai.thinkrail.zh`).
 #
-# Version scheme: `<newest upstream tag>-zh.<n>`, e.g. `0.4.0-nightly.3-zh.1`. The base comes
-# from the newest tag reachable from the built commit, so the number always sorts above the
-# upstream release it derives from — which is exactly what makes the app accept the update.
-# The release body is the ledger (`upstream-sha:` / `version:`); nothing is ever stamped into
-# the branch, so upstream merges never conflict on version.ts.
+# Version scheme: `<upstream version without its prerelease>-zh.<serial>`, e.g. `0.4.0-zh.12`.
+# The stem comes from the newest tag reachable from the built commit and the serial is our own
+# counter, taken from the ledger and always incremented. Gluing the serial onto upstream's own
+# prerelease (`0.4.0-nightly.10-zh.1`) does not work: semver compares `10-zh` and `7-zh` as
+# alphanumeric identifiers, so `10-zh` ranks *below* `7-zh` and the feed stalls at single digits.
+# The release body is the ledger (`upstream-sha:` / `version:` / `max-version:`); nothing is ever
+# stamped into the branch, so upstream merges never conflict on version.ts.
 on:
   schedule:
     # Every six hours. A run whose upstream commit is already published exits before it installs
@@ -132,25 +134,35 @@ jobs:
             exit 0
           fi
 
+          # Drop upstream's prerelease segment before stamping ours on: `0.4.0-nightly.10` becomes
+          # `0.4.0`, so the serial is a plain numeric identifier that orders the way it reads.
+          stem=${BASE%%-*}
+
           serial=1
           case "$published_max" in
-            "${BASE}-zh."*) serial=$(( ${published_max##*-zh.} + 1 )) ;;
+            *-zh.*) serial=$(( ${published_max##*-zh.} + 1 )) ;;
+          esac
+          case "$serial" in
+            '' | *[!0-9]*)
+              echo "::error::cannot read a serial out of the published version ${published_max}"
+              exit 1
+              ;;
           esac
 
           # The feed must only move forward: an app that already installed a newer build never looks
           # back, so a lower version would silently strand every reader on the old one.
           if [ -n "$published_version" ]; then
             order=$(bun -e 'console.log(Bun.semver.order(process.argv[1], process.argv[2]))' \
-              "${BASE}-zh.${serial}" "$published_version")
+              "${stem}-zh.${serial}" "$published_version")
             if [ "$order" -le 0 ]; then
-              echo "::error::${BASE}-zh.${serial} is not newer than the published ${published_version}"
+              echo "::error::${stem}-zh.${serial} is not newer than the published ${published_version}"
               exit 1
             fi
           fi
 
           echo "rebuild=true" >> "$GITHUB_OUTPUT"
-          echo "version=${BASE}-zh.${serial}" >> "$GITHUB_OUTPUT"
-          echo "building ${BASE}-zh.${serial} from $SHA"
+          echo "version=${stem}-zh.${serial}" >> "$GITHUB_OUTPUT"
+          echo "building ${stem}-zh.${serial} from $SHA (upstream ${BASE})"
 
       - name: Merge upstream into the fork branch
         if: steps.decide.outputs.rebuild == 'true'
