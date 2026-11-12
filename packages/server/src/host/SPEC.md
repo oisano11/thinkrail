@@ -122,7 +122,14 @@ channel fan-out, and the process-boot wrapper both launchers share.
   cached read so the siblings never import each other—the
   **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch` and inject `agent`'s project-skill path classifier so
-  each capped batch carries independent `skillChange: none|detected|unknown` evidence; expose
+  each capped batch carries independent `skillChange: none|detected|unknown` evidence; inject `git`'s
+  `ignoredPaths` (`setIgnoredPathsResolver`) without the folders `agent`'s `mayHoldProjectSkills` matches,
+  so the Linux watcher still detects a skill edit under an ignored `.claude/` (an ignored folder inside a
+  skill is still watched unless its name starts with a dot, like `.venv`), and without `.thinkrail/context`,
+  the folders on the way to it and everything under it, so neither its seeded `*` `.gitignore` nor a user
+  rule like `.thinkrail/` silences the agent's docs there (the cost: on Linux an ignored tree there takes
+  a watch per folder, as with the recursive watcher, so a big built or unpacked tree belongs elsewhere);
+  expose
   **`workspace.watchReady`** as the typed preflight that awaits a fresh watcher's conservative startup nudge
   before a web skill-loading flow
   captures its baseline and reports whether the watcher was already known ready (the client's replay-safe
@@ -236,7 +243,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
-  separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
+  separately; `project.rename` and `project.move` likewise delegate to the projects module's `renameProject` / `moveProject`, which own validation and the push; both refuse the Chats container as either end. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
   only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
   is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
   `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
@@ -251,7 +258,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   pick + `chat_started`): only a user's pick (`pick` — `session.create`, `chat.create` and a dialog's
   kickoff that **named** a model) is recorded as recent through `settings`' `noteRecentModel`, as is every
   `session.setModel`; a default-resolved creation, the review chat, Continue's destination and an agent's
-  `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. `model.contextSettings`, `model.setContextWindow` and `model.applyContextCeilings` delegate to agent's `modelContext`
+  `start_workspace` are the host's or the agent's choice, not the user's, and are not recorded. Without an
+  explicit model, an available saved model or an available pi global default, the resolver first applies
+  pi's model preference to connections whose wire auth kind is not `env`, then to the whole available
+  catalog. An ambient API key must not preempt a configured subscription; explicit selections, available
+  saved defaults and pi's global default still take precedence, including environment-backed ones. This
+  changes only new-chat resolution, never an existing session's model or a failed request's connection.
+  `model.contextSettings`, `model.setContextWindow` and `model.applyContextCeilings` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
   invalidate catalogs across clients. The four `customEndpoints.*` methods delegate to agent's
@@ -566,11 +579,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
 - **Change mutations are serialized per workspace, on their own chain** (`reviewLock.ts`'s
   `createKeyedLock` mints both): `change.revert`/`change.undo` run under **`withChangeLock(workspaceId)`**
-  so two reverts cannot interleave their load→verify→write passes, while reviews and changes —
+  so two reverts cannot interleave their load→verify→write passes — and the Files tree's `fs.copy` (on the
+  destination workspace) and `fs.delete` take the same chain, so a paste or delete never interleaves with
+  a revert of the same worktree, while reviews and changes —
   independent resources — never queue behind each other. The agent is deliberately **not** paused: the
-  `changes` module's compare-and-swap makes the race safe, and the fs watcher's `fsChanged` tick re-reads
+  `changes` module's compare-and-swap and `fs`'s per-step identity checks (`ENTRY_CHANGED`) make the
+  race safe, and the fs watcher's `fsChanged` tick re-reads
   the open tabs after a write exactly as it does after an agent edit (so both handlers `ensureWatch`
-  first). The named failures travel as `WsResponse.errorCode`
+  first). `fs.copy`/`fs.delete` also publish their own invalidation on success through
+  `watch.notifyWorkspacePathsChanged` (every path the copy wrote; a deleted folder as an unlisted subtree),
+  because the watcher never reports `node_modules` or an unwatched gitignored folder. The named failures travel as `WsResponse.errorCode`
   (`STALE_VIEW`/`SCOPE_IMMUTABLE`/`RANGE_INVALID`/`RECEIPT_UNKNOWN`/`UNSUPPORTED_CHANGE`) through the same `CodedError`
   mapping `UNKNOWN_COMMIT` uses — the dispatch names no codes of its own, so a code added in `contracts`
   and thrown by a feature reaches the client with no host-side allowlist to update.
@@ -920,6 +938,14 @@ enabled/confirmed choice before entering analytics attribution.
   `terminalSend.ts`), so the host lifts the latch and resumes that client's terminals. A socket with
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
+- **The composer's image budget stays under the inbound frame cap, never the other way round.** Bun
+  closes a socket on a frame over `maxPayloadLength` before any handler sees it, taking every open
+  request with it, and the client replayed that frame on every reconnect (#671). `maxPayloadLength` is
+  `WS_MAX_FRAME_BYTES` (16 MiB, [[module-contracts]]); the 12 MiB `REQUEST_IMAGE_BASE64_BUDGET` leaves
+  room under it for the prompt text, and `WsTransport.request` refuses a larger frame before it is sent
+  ([[submodule-web-transport]]). Raising the cap instead was tried and rejected: pi echoes a prompt's
+  images back through `pi.event` several times, and past Bun's outbound backpressure limit those frames
+  are dropped (#1179, #1180); providers also reject a whole request near 20 MB.
 - The host is the single place features are wired together — features never reach back into it.
 - **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
   The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
@@ -927,7 +953,7 @@ enabled/confirmed choice before entering analytics attribution.
   the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
   browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the
   header check should the route ever accept a simple method such as `POST`. It is the host's only HTTP
-  write because the alternatives fail the feature: base64 over the WebSocket hits Bun's 16 MB frame cap
+  write because the alternatives fail the feature: base64 over the WebSocket hits the 16 MiB frame cap
   (CJK fonts run past 20 MB) and a pending frame is replayed on every reconnect, and the host's native
   file dialog cannot take a drag-and-drop and opens on the host's screen, not a remote browser's.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,

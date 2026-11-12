@@ -89,16 +89,18 @@ re-opened transcripts provider-valid.
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
     mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation keeps its saved model when that model is available in the current runtime.
-    If it is unavailable, Pi chooses its settings default, then its ordered provider defaults, then the
-    first available model; this need not match ThinkRail's AppConfig default or the saved provider.
-    The exception is a model pi still lists but the account does not serve (`modelAvailability` filtered
-    it), which pi would otherwise restore verbatim; the host passes `preferredDefaultModel` instead.
-    Opening does not change the saved model. An ordinary physical-model fallback becomes durable when
-    Pi appends an assistant response, not at send acceptance; explicit model selection persists at once.
-    Merely opening a chat preserves its original model for when that provider returns. The host exposes
-    the replacement in normal session state but discards the SDK's `modelFallbackMessage`, so there is
-    no separate fallback warning. With no available model, the transcript remains readable and no
-    placeholder model is persisted as a replacement.
+    The saved model is pi's restore selection (`piBranchSelection` mirrors pi's unexported
+    `getBranchSelection`), not the last physical response: a still-registered virtual `model_change`
+    holds, so a router whose last routed model is gone still opens and runs on the router.
+    If it is unavailable — absent from the runtime, or listed by pi but not served to the account
+    (`modelAvailability` filtered it) — the chat still opens and its transcript stays readable, but the
+    host never runs it on a model the user did not choose: it reports `model: null`, logs the saved ref,
+    and `admitRun` rejects every run with "The chat's saved model … is unavailable" until
+    `setSessionModel` succeeds. Whatever model pi picked internally is never sent to, so the explicit
+    choice is the only switch and pi records it as a `model_change`. Opening does not change the saved
+    model, so the chat restores it once that provider returns. Post-mortem (#1309): the earlier design
+    let pi's settings/provider default answer silently and discarded `modelFallbackMessage`, billing a
+    13× pricier model on another provider with no `model_change` and no warning.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
     `getAvailableSnapshot()` narrowed by `modelAvailability`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
@@ -150,10 +152,12 @@ re-opened transcripts provider-valid.
     never rewrites a file by itself, and a model whose window stays below the contracts' minimum with no
     larger sibling is listed read-only (`isModelContextWritable` false) rather than offered a control.
     `applyModelContextCeilings` writes every such ceiling onto the writable rows that have no override
-    yet, in the same single save, so the whole list can be filled in one call. Eligibility is derived
+    yet, in the same single save, so the whole list can be filled in one call. A `custom-*` provider's
+    model keeps the wider range the contracts give it (`modelContextWindowLimits`, 1,024–10M) and takes
+    only targeted saves, never the shared target. Eligibility is derived
     from pi's catalog, never from a model-id list, so catalog defaults above 1M stay untouched by a bulk
     save. A save validates
-    the contracts' 272K–1M range first, patches `providers.<p>.modelOverrides.<id>.contextWindow` for the
+    the contracts' range first, patches `providers.<p>.modelOverrides.<id>.contextWindow` for the
     target — or, for `available`, every eligible pair the contracts' `isSharedModelContextTarget` admits
     (a named target whose window cannot hold the request is refused, not clamped), so
     a shared save never rewrites an override outside the range that only a targeted save can touch — and
@@ -161,7 +165,10 @@ re-opened transcripts provider-valid.
     network-disabled `runtime.refresh` on the current generation and the host's `provider.changed`
     signal; a no-op save does neither. Every read also refreshes locally first so external pi CLI edits
     appear. Live sessions keep the model they were created with; new chats resolve the updated metadata.
-    pi owns schema validation and the effective value. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
+    pi owns schema validation and the effective value. pi applies `modelOverrides` after a provider's
+    own `models[]`, so a custom server's user-set window wins over the detected one that
+    `customEndpoints` writes into `models[]`, survives every re-Detect and save, and Default falls back
+    to the detected value. Accepted gap: a Central rebuild whose runtime loaded the file before a save and activated
     after its refresh serves the old budget until the next read refreshes it.
   - `cacheWarming` — pi's `cacheWarming` setting (`off` / `streaming` / `idle`) in pi's global
     `settings.json`, the only state. Pi 1.5.1 made `idle` its default — every idle chat re-sends its
@@ -198,24 +205,41 @@ re-opened transcripts provider-valid.
       listing is the model ids, so limits come from what servers add to it — `max_model_len` (vLLM, sglang),
       `max_input_tokens` / `max_output_tokens` (LiteLLM), `context_length`, llama.cpp `meta.n_ctx` — and from
       same-origin best-effort extras run in parallel (3s each): llama.cpp `/props` (per-slot `n_ctx`, an
-      `enable_thinking` template, `supports_tools`), Ollama `/api/version` then `/api/show` per model
-      (`num_ctx`, capabilities; non-`completion` models dropped) and LM Studio `/api/v0/models` (loaded
-      context, `vlm`, `tool_use`; embeddings dropped). An extra that fails or 404s only leaves facts
-      unknown, so a gateway costs a few harmless 404s. Training lengths are ignored. Failures return a
-      closed reason, never a response body. Probes run on the host because the agent talks to the server
-      from there (and a browser would hit CORS).
+      `enable_thinking` template, which sets both `reasoning` and `chatTemplateThinking`, `supports_tools`),
+      Ollama `/api/version` then `/api/show` per model (a Modelfile `num_ctx` when one is set, capabilities;
+      non-`completion` models dropped) and LM Studio
+      `/api/v0/models` (loaded context, `vlm`, `tool_use`; embeddings dropped). An extra that fails or
+      404s only leaves facts unknown, so a gateway costs a few harmless 404s. Training lengths
+      (`n_ctx_train`) are ignored. Ollama `model_info["<architecture>.context_length"]` is the model's
+      metadata maximum, not the window a local server runs: with no `num_ctx` it loads
+      `OLLAMA_CONTEXT_LENGTH` and silently truncates past that. A local endpoint therefore leaves context
+      unknown unless `num_ctx` or the `/v1/models` listing already provided one. That metadata length is
+      recorded only for an endpoint known to serve the full window — Ollama cloud, host `ollama.com`.
+      `/api/version` of `0.0.0` is not that signal; source-built local servers report it too.
+      Failures return a closed reason, never a response body. Probes run on the host because the agent
+      talks to the server from there (and a browser would hit CORS).
     - **Write only reported facts (decision).** A model's `contextWindow`, `reasoning` and `input` are
       written only when reported; otherwise pi's defaults apply — 128K context, with pi's overflow
       recovery compacting and retrying once when the server returns a recognized "context exceeded"
-      error (accepted gap: a server that silently truncates, like Ollama by default, gives it nothing to
-      recover from). `maxTokens` is the reported max output when it fits the context, else ¼ of a known
-      context clamped to 256–16K (pi's 16K default would fail vLLM's prompt + `max_tokens` check on a
-      small context, and compaction cannot recover from that), else omitted. Cost is zero. A new provider
+      error (accepted gap: a server that silently truncates, like local Ollama with no Modelfile
+      `num_ctx`, gives it nothing to recover from). `maxTokens` is the reported max output when it fits
+      the context, else ¼ of a known context clamped to 256–16K (pi's 16K default would fail vLLM's
+      prompt + `max_tokens` check on a small context, and compaction cannot recover from that), else
+      omitted. Cost is zero. A new provider
       gets conservative compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField:
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
       host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every
-      field the form doesn't manage, and removes the managed fields from that model's `modelOverrides`,
-      which pi would otherwise apply over the saved values.
+      field the form doesn't manage, and removes the managed fields (`maxTokens`, `reasoning`, `input`)
+      from that model's `modelOverrides`, which pi would otherwise apply over the saved values. The
+      context window is not one of them: `models[].contextWindow` holds only the detected value, which is
+      what the listing reports, and `modelOverrides.<id>.contextWindow` is the user's own value, owned by
+      `modelContext` and kept by every save. A model whose chat template takes
+      `enable_thinking` (`chatTemplateThinking: true`) gets `compat.thinkingFormat: "qwen-chat-template"`:
+      without it pi sends OpenAI's `reasoning_effort`, which Qwen-style templates on llama.cpp and vLLM
+      ignore, so thinking could never be turned off and every turn (compaction included) would pay for it.
+      `false` removes that format, `null` (unreported, or a client that predates the field) leaves the
+      model's `compat` as written; a known value also clears `thinkingFormat` from that model's
+      `modelOverrides`.
     - **Keys.** The key never crosses the wire (`hasApiKey`). A typed probe key resolves a whole `$VAR` /
       `${VAR}` reference and is otherwise used literally; a `!command` is never run by a probe (a narrow
       subset of pi's resolver, enough for Detect, not a mirror of it). A probe naming `endpointId` reuses
@@ -372,7 +396,8 @@ re-opened transcripts provider-valid.
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
     resolves new-chat defaults host-side from `AppConfig`, falling back to pi's global `settings.json`
     default (`piDefaultModelRef`), then `preferredDefaultModel` (pi's provider default, then the first
-    available model), when an earlier choice is unset or unavailable, without rewriting either setting.
+    available model) among non-environment connections, then among all available connections, when an
+    earlier choice is unset or unavailable, without rewriting either setting.
     Project `.pi/settings.json` defaults do not apply to new chats. `available[0]` alone was catalog order — `openai/gpt-4`, an 8K-context
     model, for a fresh OpenAI connection. An explicitly requested unavailable model is rejected rather
     than silently substituted. The host passes the chosen model explicitly so the UI and session agree.
@@ -407,9 +432,10 @@ re-opened transcripts provider-valid.
     reference also use PI's model resolver—then returns `{ summary, messages }` —
     `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `tool-response` replies (and the retired `ask-user-answers` form in
-    older transcripts) an interactive tool's card pairs by tool call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
-    kept precisely because pi's resolved transcript is all that survives, so dropping it would hand the
-    client a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is
+    older transcripts) an interactive tool's card pairs by tool call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away.
+    `history.displayTranscriptMessages` puts those summarized turns back in front of the marker so the
+    same session can still review them; the marker is what keeps the cut visible. Live `session.messages`
+    still supply the streaming tail after that marker. Which roles those are is
     **not decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index
     so the two cannot drift and shift `messageIndex`), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
     re-open with no transcript read, for a caller that only needs the session *promptable* again (the
@@ -546,15 +572,15 @@ re-opened transcripts provider-valid.
     pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
     and synthesising one there would record the *host's* stack — pointing the reader at
     `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
-    **Members split three ways, not two.** *Untranslatable* ones are inert no-ops and rightly so — they take a
+    **Members distinguish browser calls from terminal-only calls.** *Untranslatable* ones are inert no-ops and rightly so — they take a
     TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
     `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
     *Translatable* ones must behave: **`theme` is a real `Theme`** (`plainTextTheme`) whose every
-    decorator returns its input unchanged. *Translatable but unimplemented* is the third group and is named
-    here so the split does not read as exhaustive: `setEditorText` / `pasteToEditor` are forwarded to the
-    host by pi's own rpc mode and a web composer could honour them; ours stay inert until something needs
-    them. What separates the theme from that group is the cost of being inert — an unimplemented editor
-    call loses one feature, an unimplemented theme kills the whole extension on its first line. `getAllThemes: []` / `getTheme: undefined` match pi's own
+    decorator returns its input unchanged. `setEditorText` and `pasteToEditor` publish fire-and-forget
+    frames of their own kinds for that session's browser composer: a replacement (an empty string clears
+    the draft) and a paste. The paste keeps pi's TUI meaning, not its RPC mode's (which delegates to
+    `setEditorText`), because the browser composer has a caret. `getEditorText` remains empty because the
+    host cannot synchronously read a browser-local draft. `getAllThemes: []` / `getTheme: undefined` match pi's own
     rpc mode; `setTheme`'s `{success:true}` is a known lie, tracked separately — a web host has no TUI
     theme to switch to, so pi's rpc-mode form (`{success:false}`) is the honest answer.
     `plainTextTheme` subclasses pi's `Theme` and overrides `fg`/`bg`/`style`/`bold`/`italic`/`underline`/
@@ -700,8 +726,10 @@ re-opened transcripts provider-valid.
     whole context carries more than 20 images — stripping changes the very count that selects that cap,
     so 2000px violators are stripped **largest-first only until the survivors fit back under the
     threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px); and the
-    **request-wide `REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB
-    per-request cap — several per-image-legal blocks can still overflow the whole request), enforced by
+    **request-wide `CONTEXT_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB
+    per-request cap — several per-image-legal blocks can still overflow the whole request; deliberately
+    its own constant, larger than the composer's 12MB per-message `REQUEST_IMAGE_BASE64_BUDGET`, so a long
+    chat keeps its screenshots), enforced by
     stripping survivors **largest-first until the aggregate fits**. This is what un-bricks a session poisoned by an oversized image
     (history is re-sent every turn, so one bad image 400s forever): sessions are append-only and the host
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
@@ -889,12 +917,14 @@ re-opened transcripts provider-valid.
     reload records the generation it started under, and its completion reconciles with a reload allowed
     only if the generation moved, judging the **new** loader. An unchanged resend or a skill-less toggle
     during a reload therefore costs nothing extra. Settings are the
-    source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
-    recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
+    source of truth across restarts and reloads: Pi ≥ 1.3 restores a resumed chat's recorded tool
+    loadout, keeping recorded removals inactive, and an extension may replay that record in its own
+    `session_start`, reloads included (`pi-web-access` does, [[module-ext-web-access]]), so attach and
+    every successful gated resource reload first re-activate every tool of an enabled registry extension
     that Pi's activated-on-registration rule would activate (declarable exposure, not `defaultActive:
-    false`), then withholds disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
-    selection. A registry tool switched off by anything other than Settings therefore returns after a
-    restart, as it does on Pi `reload()`.
+    false`), then withhold disabled ones. Built-in, MCP, subagent and review tools keep Pi's restored
+    selection. A registry tool switched off by anything other than Settings — the extension's own
+    activation policy included — therefore returns after a restart or a reload.
     **Installed pi packages** have a switch of the same global shape, `setDisabledPackagesResolver`
     (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
     no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
@@ -1075,7 +1105,7 @@ re-opened transcripts provider-valid.
     tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
     workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill) — and the **ThinkRail extensions
     from the server registry** ([[submodule-server-extensions]]; `visualize`, `ask-user-question`, and
-    `web-access` with `pi-web-access`'s tools and `librarian` skill) as named inline extensions. Existing personal aliases are Claude
+    `web-access` with `pi-web-access`'s tools and its own `librarian` skill) as named inline extensions. Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -1240,7 +1270,9 @@ re-opened transcripts provider-valid.
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
-  `isProjectSkillPath(relativePath)` (watch-classification predicate);
+  `isProjectSkillPath(relativePath)` (watch-classification predicate) /
+  `mayHoldProjectSkills(relativePath)` (the folders a project skill can sit in: an alias folder like
+  `.claude` and its `skills/` tree without dot-folders, which pi never scans);
   `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
@@ -1293,8 +1325,8 @@ re-opened transcripts provider-valid.
   `pi-thinkrail-workflow` + `pi-todos` (the bundled pi packages — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph`); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
   skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly; the barrel
-  stays Node-loadable for the workflow harness ([[module-workflow-tests]]) because a registry extension
-  over raw third-party `.ts` loads it lazily, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
+  stays Node-loadable for the workflow harness ([[module-workflow-tests]]): web access's third-party
+  package is compiled JavaScript, imported when its factory runs, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
   `models.json` edits in `modelsFile`, `modelContext` and `customEndpoints`); global `fetch` (only
   `customEndpoints`' user-initiated probes of the address the user typed); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
@@ -1303,8 +1335,10 @@ re-opened transcripts provider-valid.
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
-  receipt stores); `trash` (the recoverable-delete primitive); Node.
-- **Forbidden:** `host`; sibling features other than `log`, `trash` and those narrow persistence surfaces (session
+  receipt stores); `trash` (the recoverable-delete primitive); `history` (`displayTranscript` only — `getMessages` must
+  emit the same display projection the search index extracts, including turns Pi summarized away from
+  model context); Node.
+- **Forbidden:** `host`; sibling features other than `log`, `trash`, `history` (`displayTranscript` only) and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 

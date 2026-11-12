@@ -86,6 +86,7 @@ import type {
 	UserFontsSnapshot,
 	UserThemesSnapshot,
 	Workspace,
+	WorkspacePathMatch,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
 import type {
@@ -141,8 +142,13 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 115;
-export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 115;
+export const PROTOCOL_VERSION = 120;
+export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 120;
+export const WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION = 119;
+export const FS_MUTATIONS_PROTOCOL_VERSION = 118;
+export const EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION = 115;
+export const CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION = 116;
+export const PROJECT_ORDER_PROTOCOL_VERSION = 117;
 export const QUESTION_PANEL_PROTOCOL_VERSION = 114;
 export const SPEC_SECTIONS_PROTOCOL_VERSION = 113;
 export const TEXT_SEARCH_PROTOCOL_VERSION = 112;
@@ -388,6 +394,7 @@ export const WS_METHODS = {
 	projectList: "project.list",
 	projectClose: "project.close",
 	projectRename: "project.rename",
+	projectMove: "project.move",
 	projectInspect: "project.inspect",
 	projectInit: "project.init",
 	projectCreate: "project.create",
@@ -410,6 +417,7 @@ export const WS_METHODS = {
 	workspaceRename: "workspace.rename",
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
+	workspaceResolvePath: "workspace.resolvePath",
 	workspaceList: "workspace.list",
 	workspaceOpenReview: "workspace.openReview",
 	workspaceBranchStatus: "workspace.branchStatus",
@@ -446,6 +454,8 @@ export const WS_METHODS = {
 	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	fsCopy: "fs.copy",
+	fsDelete: "fs.delete",
 	specGraph: "spec.graph",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
@@ -786,14 +796,23 @@ export interface ModelDefault {
 	thinkingLevel: ThinkingLevel;
 }
 
-export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
+export interface ModelContextWindowLimits {
+	readonly min: number;
+	readonly max: number;
+}
 
-export function isModelContextWindow(value: unknown): value is number {
+export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
+export const CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS = { min: 1_024, max: 10_000_000 } as const;
+
+export function isModelContextWindow(
+	value: unknown,
+	limits: ModelContextWindowLimits = MODEL_CONTEXT_WINDOW_LIMITS,
+): value is number {
 	return (
 		typeof value === "number" &&
 		Number.isSafeInteger(value) &&
-		value >= MODEL_CONTEXT_WINDOW_LIMITS.min &&
-		value <= MODEL_CONTEXT_WINDOW_LIMITS.max
+		value >= limits.min &&
+		value <= limits.max
 	);
 }
 
@@ -817,11 +836,11 @@ export interface ModelContextSetting
 
 /** Whether a stored override can exist at all: the window the model can reach clears the floor. */
 export function isModelContextWritable(
-	setting: Pick<ModelContextSetting, "contextWindow" | "ceiling">,
+	setting: Pick<ModelContextSetting, "provider" | "contextWindow" | "ceiling">,
 ): boolean {
-	return (
-		(setting.ceiling?.contextWindow ?? setting.contextWindow) >= MODEL_CONTEXT_WINDOW_LIMITS.min
-	);
+	// A custom server's window is guarded by its own range, so its floor is far lower than the app's.
+	const limits = modelContextWindowLimits(setting.provider);
+	return (setting.ceiling?.contextWindow ?? setting.contextWindow) >= limits.min;
 }
 
 /** Pi's `cacheWarming` setting: `off`, `streaming` (only while a run is active) or `idle` (also between runs). */
@@ -854,6 +873,8 @@ export interface CustomEndpointModel {
 	vision: boolean | null;
 	/** Whether the server says the model takes tool calls; never saved, so a listed endpoint reports null. */
 	tools: boolean | null;
+	/** The chat template turns thinking on and off through `enable_thinking` (llama.cpp reports it). */
+	chatTemplateThinking: boolean | null;
 }
 
 /** An OpenAI-compatible `custom-*` provider in pi's `models.json`. The key itself never crosses the wire. */
@@ -894,10 +915,18 @@ export interface CustomEndpointDraft {
 	models: CustomEndpointModel[];
 }
 
+export function modelContextWindowLimits(provider: string): ModelContextWindowLimits {
+	return isCustomEndpointId(provider)
+		? CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS
+		: MODEL_CONTEXT_WINDOW_LIMITS;
+}
+
 export function isSharedModelContextTarget(
-	setting: Pick<ModelContextSetting, "override" | "contextWindow" | "ceiling">,
+	setting: Pick<ModelContextSetting, "provider" | "override" | "contextWindow" | "ceiling">,
 ): boolean {
 	if (!isModelContextWritable(setting)) return false;
+	// A custom endpoint's model belongs to that one endpoint, so the shared control must leave it alone.
+	if (isCustomEndpointId(setting.provider)) return false;
 	if (setting.override !== null) return isModelContextWindow(setting.override);
 	// A model pi already reports above the floor needs no override: only one sitting at the floor is
 	// waiting for a window the provider did not report.
@@ -918,6 +947,10 @@ export interface WsMethodMap {
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
 	"project.rename": { params: { id: string; name: string }; result: Project };
+	"project.move": {
+		params: { id: string; targetId: string; placement: "before" | "after" };
+		result: Project;
+	};
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	"project.init": { params: { path: string }; result: Project };
 	"project.create": {
@@ -973,6 +1006,7 @@ export interface WsMethodMap {
 		params: { projectId: string; path: string };
 		result: Workspace;
 	};
+	"workspace.resolvePath": { params: { path: string }; result: WorkspacePathMatch | null };
 	"workspace.list": {
 		params: { projectId: string; includeDiffStats?: boolean };
 		result: Workspace[];
@@ -1084,6 +1118,16 @@ export interface WsMethodMap {
 		params: { workspaceId: string; path: string; maxBytes?: number };
 		result: { content: string; meta: ResourceMeta };
 	};
+	"fs.copy": {
+		params: {
+			sourceWorkspaceId: string;
+			sourcePath: string;
+			destinationWorkspaceId: string;
+			destinationDirectory: string;
+		};
+		result: { path: string };
+	};
+	"fs.delete": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string; opened?: "page" | "rail" };
@@ -1531,11 +1575,14 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
+export const WS_MAX_FRAME_BYTES = 16 * 1024 * 1024;
+
 export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
 	| "NOT_GIT"
 	| "ALREADY_OPEN"
+	| "PROJECT_BOOTSTRAPPING"
 	| "PROJECT_CLONE_INVALID"
 	| "PROJECT_CLONE_FAILED"
 	| "PROJECT_CLONE_CLEANUP_FAILED"
@@ -1572,6 +1619,8 @@ export type WsErrorCode =
 	| "WORKTREE_CHECKOUT_STALLED"
 	| "WORKSPACE_PATH_TAKEN"
 	| "FILE_TOO_LARGE"
+	| "COPY_TOO_LARGE"
+	| "ENTRY_CHANGED"
 	| "CHATS_CONTAINER"
 	| "CHAT_WORKSPACE"
 	| "CHATS_STORE_UNAVAILABLE"
@@ -1583,6 +1632,7 @@ export type WsErrorCode =
 	| "CONTINUATION_IN_FLIGHT"
 	| "TEXT_SEARCH_TIMEOUT"
 	| "TEXT_SEARCH_FAILED"
+	| "FRAME_TOO_LARGE"
 	| SpeechErrorCode;
 
 export interface WsResponse {

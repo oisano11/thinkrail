@@ -37,6 +37,7 @@ import {
 	toast,
 	useAppStore,
 } from "./appStore";
+import type { PromptImage } from "./promptImageState";
 import {
 	selectActiveFilePath,
 	selectChatAttended,
@@ -402,6 +403,19 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 
 	store.handlePiEvent(userStart("[thinkrail:todo-nudge] plan changed"), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
+});
+
+test("sending a message works where crypto.randomUUID is unavailable (plain-http origin)", () => {
+	const original = crypto.randomUUID;
+	Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+	try {
+		const store = useAppStore.getState();
+		store.openChatSession("ws1", "insecure", null, "medium");
+		store.appendUserMessage("insecure", "hello");
+		expect(rt("insecure").turns.filter((t) => t.kind === "user")).toHaveLength(1);
+	} finally {
+		Object.defineProperty(crypto, "randomUUID", { value: original, configurable: true });
+	}
 });
 
 test("a matching user echo adopts the host clock while retaining optimistic identity and attachment labels", () => {
@@ -1532,6 +1546,93 @@ test("closeChatRuntime drops only its own runtime", () => {
 	expect(rt("b").isStreaming).toBe(true);
 });
 
+test("extension editor text waits for the addressed composer and a replacement can clear it", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	store.setChatDraft("a", "Old draft");
+	store.setChatDraft("b", "Other chat");
+	store.applyExtUi({
+		id: "edit-a",
+		sessionId: "a",
+		kind: "setEditorText",
+		text: "New 中文\ndraft",
+	});
+	expect(rt("a").composerEdit).toEqual({ id: "edit-a", kind: "replace", text: "New 中文\ndraft" });
+	expect(rt("a").draft).toBe("Old draft");
+	expect(rt("b").composerEdit).toBeNull();
+	store.applyExtUi({ id: "clear-a", sessionId: "a", kind: "setEditorText", text: "" });
+	expect(rt("a").composerEdit).toEqual({ id: "clear-a", kind: "replace", text: "" });
+	store.consumeComposerEdit("a", "edit-a");
+	expect(rt("a").composerEdit?.id).toBe("clear-a");
+	store.consumeComposerEdit("a", "clear-a");
+	expect(rt("a").composerEdit).toBeNull();
+});
+
+test("pending extension pastes fold into the edit a composer applies once", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.applyExtUi({ id: "p1", sessionId: "a", kind: "pasteToEditor", text: "one" });
+	store.applyExtUi({ id: "p2", sessionId: "a", kind: "pasteToEditor", text: " two" });
+	expect(rt("a").composerEdit).toEqual({ id: "p2", kind: "paste", text: "one two" });
+	store.applyExtUi({ id: "r", sessionId: "a", kind: "setEditorText", text: "Base" });
+	store.applyExtUi({ id: "p3", sessionId: "a", kind: "pasteToEditor", text: " tail" });
+	expect(rt("a").composerEdit).toEqual({ id: "p3", kind: "replace", text: "Base tail" });
+});
+
+test("extension editor text received before a chat opens is applied in order", () => {
+	const store = useAppStore.getState();
+	store.applyExtUi({ id: "edit-first", sessionId: "later", kind: "setEditorText", text: "First" });
+	store.applyExtUi({ id: "paste-last", sessionId: "later", kind: "pasteToEditor", text: " last" });
+	store.openChatSession("ws1", "other", null, "medium");
+	expect(rt("other").composerEdit).toBeNull();
+	store.openChatSession("ws1", "later", null, "medium");
+	expect(rt("later").composerEdit).toEqual({
+		id: "paste-last",
+		kind: "replace",
+		text: "First last",
+	});
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+});
+
+test("image drafts stay with their own runtime and unknown-session updates are ignored", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	const image: PromptImage = {
+		id: "picked",
+		name: "picked.png",
+		content: { type: "image", mimeType: "image/png", data: "eA==" },
+	};
+	store.updateChatPromptImages("a", (current) => ({ ...current, images: [image], pending: 1 }));
+	store.setChatDraft("a", "keep this image");
+	expect(rt("a").promptImages.images).toEqual([image]);
+	expect(rt("a").promptImages.pending).toBe(1);
+	expect(rt("b").promptImages.images).toEqual([]);
+	expect(rt("b").promptImages.pending).toBe(0);
+	store.updateChatPromptImages("missing", () => {
+		throw new Error("a missing runtime must not run an image update");
+	});
+	expect(useAppStore.getState().sessions.missing).toBeUndefined();
+});
+
+test("closing a chat drops its image draft and reopening gets a new decode generation", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.updateChatPromptImages("a", (current) => ({ ...current, pending: 1 }));
+	const generation = rt("a").promptImages.generation;
+	store.closeChatRuntime("a");
+	store.updateChatPromptImages("a", () => {
+		throw new Error("a late decode must not resurrect its closed runtime");
+	});
+	expect(useAppStore.getState().sessions.a).toBeUndefined();
+	store.openChatSession("ws1", "a", null, "medium");
+	expect(rt("a").promptImages.generation).not.toBe(generation);
+	expect(rt("a").promptImages.images).toEqual([]);
+	expect(rt("a").promptImages.pending).toBe(0);
+	expect(rt("a").promptImages.errors).toEqual([]);
+});
+
 test("applyExtUi routes a dialog to its session; the reply clears only that one", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -2244,6 +2345,8 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "sync", null, "medium");
 	store.setChatDraft("sync", "keep my draft");
+	store.updateChatPromptImages("sync", (current) => ({ ...current, pending: 1 }));
+	store.setChatReadingAnchor("sync", { rowId: "row-1", offset: -24 });
 	store.appendUserMessage("sync", "old summarized prompt");
 	store.handlePiEvent(agentStart, "sync");
 	store.handlePiEvent({ type: "compaction_start", reason: "overflow" }, "sync");
@@ -2306,11 +2409,28 @@ test("reconcileSession replaces stale host state while preserving browser-local 
 		resuming: true,
 	});
 	expect(after.draft).toBe("keep my draft");
+	expect(after.promptImages).toBe(before.promptImages);
+	expect(after.readingAnchor).toEqual({ rowId: "row-1", offset: -24 });
 	expect(after.queue).toEqual({ steering: [], followUp: ["continue afterward"] });
 	expect(after.thinkingLevel).toBe("high");
 	expect(after.syncedConnectionGeneration).toBe(7);
 	expect(after.eventRevision).toBe(before.eventRevision + 1);
 	expect(after.statsRefreshTick).toBe(before.statsRefreshTick);
+});
+
+test("setChatReadingAnchor stores a detached reading position and skips an identical write", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "reading", null, "medium");
+	expect(rt("reading").readingAnchor).toBeNull();
+
+	store.setChatReadingAnchor("reading", { rowId: "row-3", offset: -40 });
+	const saved = rt("reading");
+	expect(saved.readingAnchor).toEqual({ rowId: "row-3", offset: -40 });
+	store.setChatReadingAnchor("reading", { rowId: "row-3", offset: -40 });
+	expect(rt("reading")).toBe(saved);
+
+	store.setChatReadingAnchor("reading", null);
+	expect(rt("reading").readingAnchor).toBeNull();
 });
 
 test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi event", () => {
@@ -2698,6 +2818,19 @@ test("applyProjectUpdated reopens and reorders the same project without duplicat
 	expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
 	expect(state.projects.filter((candidate) => candidate.id === "p2")).toHaveLength(1);
 	expect(state.recentProjects[0]?.closed).toBeUndefined();
+});
+
+test("open projects follow the host's rank while Recents stay newest opened first", () => {
+	const p1 = project();
+	const p2 = project({ id: "p2", path: "/projects/two", slug: "project-two", lastOpened: 200 });
+	useAppStore.getState().installProjectSnapshot([p1, p2], [p1, p2]);
+	expect(useAppStore.getState().projects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
+
+	useAppStore.getState().applyProjectUpdated({ ...p1, rank: 201 });
+
+	const state = useAppStore.getState();
+	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p1", "p2"]);
+	expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p2", "p1"]);
 });
 
 test("applyProjectUpdated closes the last project to the no-project state", () => {
@@ -3495,6 +3628,7 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 test("files tree state keeps per-workspace folders and scroll, and drops a removed workspace", () => {
 	useAppStore.setState({
 		filesTreeByWorkspace: {},
+		fileClipboard: { workspaceId: "w1", path: "src/a.ts" },
 		removedWorkspaceIds: nullProto<Record<string, true>>(),
 		workspaces: { p1: [pushedWorkspace()] },
 	});
@@ -3520,6 +3654,7 @@ test("files tree state keeps per-workspace folders and scroll, and drops a remov
 
 	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
 	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
+	expect(useAppStore.getState().fileClipboard).toBeNull();
 	useAppStore.getState().setFilesTreeExpanded("w1", ["src"], true);
 	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
 });

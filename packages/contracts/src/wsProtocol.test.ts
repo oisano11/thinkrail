@@ -25,32 +25,41 @@ import {
 	CONTINUATION_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
 	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
+	FS_MUTATIONS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCacheWarmingMode,
 	isCustomEndpointId,
+	isModelContextWindow,
+	isSharedModelContextTarget,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
+	MODEL_CONTEXT_WINDOW_LIMITS,
 	MODEL_PICKER_PROTOCOL_VERSION,
+	modelContextWindowLimits,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PROJECT_ORDER_PROTOCOL_VERSION,
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
@@ -80,6 +89,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
+	WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -276,9 +286,9 @@ test("voice input is pinned to v107", () => {
 	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
 });
 
-test("context window ceilings are pinned to v115", () => {
-	expect(CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION).toBe(115);
-	expect(PROTOCOL_VERSION).toBe(115);
+test("context window ceilings are pinned to v120", () => {
+	expect(CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION).toBe(120);
+	expect(PROTOCOL_VERSION).toBe(120);
 	expect(WS_METHODS.modelApplyContextCeilings).toBe("model.applyContextCeilings");
 	expect(WS_METHODS.modelContextSettings).toBe("model.contextSettings");
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
@@ -292,6 +302,13 @@ test("user-selectable fonts are pinned to v102", () => {
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");
 	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
+});
+
+test("Files tree copy and delete are pinned to v118", () => {
+	expect(FS_MUTATIONS_PROTOCOL_VERSION).toBe(118);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
+	expect(WS_METHODS.fsCopy).toBe("fs.copy");
+	expect(WS_METHODS.fsDelete).toBe("fs.delete");
 });
 
 test("background workspace creation is pinned to v104", () => {
@@ -346,10 +363,27 @@ test("find in files is pinned to v112", () => {
 	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
 });
 
+test("project order is pinned to v117", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_ORDER_PROTOCOL_VERSION);
+	expect(PROJECT_ORDER_PROTOCOL_VERSION).toBe(117);
+	expect(WS_METHODS.projectMove).toBe("project.move");
+});
+
+test("workspace path resolution is pinned to v119", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION);
+	expect(WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION).toBe(119);
+	expect(WS_METHODS.workspaceResolvePath).toBe("workspace.resolvePath");
+});
+
 test("the question panel height setting is pinned to v114", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
 	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
+});
+
+test("extension editor text is pinned to v115", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION);
+	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
 });
 
 test("continue in workspace is pinned to v110", () => {
@@ -476,6 +510,28 @@ test("model context settings name their two methods at v76", () => {
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
 	expect(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION).toBe(76);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
+});
+
+test("custom server models take a targeted context window from v116, outside the GPT preset", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION);
+	expect(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION).toBe(116);
+	const custom = `${CUSTOM_ENDPOINT_ID_PREFIX}gateway`;
+	expect(modelContextWindowLimits(custom)).toBe(CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(modelContextWindowLimits("openai")).toBe(MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(isModelContextWindow(8_192, modelContextWindowLimits(custom))).toBe(true);
+	expect(isModelContextWindow(8_192)).toBe(false);
+	for (const value of [1_023, 10_000_001, 4_096.5])
+		expect(isModelContextWindow(value, CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS)).toBe(false);
+	const row = (provider: string, override: number | null) => ({
+		provider,
+		override,
+		contextWindow: 272_000,
+		ceiling: null,
+	});
+	expect(isSharedModelContextTarget(row("openai", null))).toBe(true);
+	expect(isSharedModelContextTarget(row("openai", 1_050_000))).toBe(false);
+	expect(isSharedModelContextTarget(row(custom, null))).toBe(false);
+	expect(isSharedModelContextTarget(row(custom, 300_000))).toBe(false);
 });
 
 test("resource metadata rides the two content reads from v75", () => {

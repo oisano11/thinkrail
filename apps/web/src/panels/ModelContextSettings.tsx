@@ -1,12 +1,16 @@
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
+	isCustomEndpointId,
 	isModelContextWindow,
 	isModelContextWritable,
 	isSharedModelContextTarget,
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	type ModelContextSetting,
 	type ModelContextTarget,
+	type ModelContextWindowLimits,
+	modelContextWindowLimits,
 	type WsMethodMap,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
@@ -17,6 +21,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+import type { CustomEndpointsState } from "./CustomEndpointsSettings";
 import { SettingsGroup } from "./SettingsGroup";
 
 const PRESETS = [
@@ -34,15 +39,23 @@ const PRESETS = [
 }[];
 
 const tokens = (t: Translator, value: number) => value.toLocaleString(localeOf(t));
-const tokenRange = (t: Translator) =>
-	`${tokens(t, MODEL_CONTEXT_WINDOW_LIMITS.min)}–${tokens(t, MODEL_CONTEXT_WINDOW_LIMITS.max)}`;
+export const tokenRange = (
+	t: Translator,
+	limits: ModelContextWindowLimits = MODEL_CONTEXT_WINDOW_LIMITS,
+) => `${tokens(t, limits.min)}–${tokens(t, limits.max)}`;
 
-function supported(protocolVersion: number | null): boolean {
-	return protocolVersion !== null && protocolVersion >= CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION;
+function supported(
+	protocolVersion: number | null,
+	minimum: number = CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
+): boolean {
+	return protocolVersion !== null && protocolVersion >= minimum;
 }
 
-function isCustomText(text: string): boolean {
-	return /^\d+$/.test(text) && isModelContextWindow(Number(text));
+export function isContextWindowText(
+	text: string,
+	limits: ModelContextWindowLimits = MODEL_CONTEXT_WINDOW_LIMITS,
+): boolean {
+	return /^\d+$/.test(text) && isModelContextWindow(Number(text), limits);
 }
 
 function ContextLimitControl({
@@ -50,6 +63,7 @@ function ContextLimitControl({
 	controlLabel = label,
 	description,
 	override,
+	limits = MODEL_CONTEXT_WINDOW_LIMITS,
 	disabled,
 	testId,
 	revision,
@@ -59,13 +73,14 @@ function ContextLimitControl({
 	controlLabel?: string;
 	description: string;
 	override: number | null | undefined;
+	limits?: ModelContextWindowLimits;
 	disabled: boolean;
 	testId: string;
 	revision: string;
 	onChange: (override: number | null) => void;
 }) {
 	const t = useT();
-	const range = tokenRange(t);
+	const range = tokenRange(t, limits);
 	const id = useId();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const restoreFocus = useRef<HTMLElement | null>(null);
@@ -93,10 +108,10 @@ function ContextLimitControl({
 			: (PRESETS.find((preset) => preset.override === override)?.id ?? "custom");
 	const isCustomActive = selected === "custom";
 	const text = draft.text.trim();
-	const showError = text !== "" && !isCustomText(text);
+	const showError = text !== "" && !isContextWindowText(text, limits);
 
 	const commitValue = () => {
-		if (disabled || !isCustomText(text) || text === draft.submitted) return false;
+		if (disabled || !isContextWindowText(text, limits) || text === draft.submitted) return false;
 		const value = Number(text);
 		if (value === override) return false;
 		setDraft({ ...draft, submitted: text });
@@ -258,12 +273,60 @@ function ContextLimitControl({
 	);
 }
 
+export function ModelContextLoadFailed({
+	pending,
+	onRetry,
+}: {
+	pending: boolean;
+	onRetry: () => void;
+}) {
+	const t = useT();
+	return (
+		<div
+			className="flex items-center gap-8 border-border-muted border-b py-12"
+			role="alert"
+			data-testid="model-context-load-failed"
+		>
+			<p className="tr-text-ui text-text-muted">{t("settings.modelContext.loadFailed")}</p>
+			<Button variant="ghost" size="m" disabled={pending} onClick={onRetry}>
+				{t("common.retry")}
+			</Button>
+		</div>
+	);
+}
+
+export function customServerIds(
+	customEndpoints: CustomEndpointsState | null,
+): ReadonlySet<string> | null {
+	if (customEndpoints?.endpoints) return new Set(customEndpoints.endpoints.map(({ id }) => id));
+	return customEndpoints === null || customEndpoints.failed ? new Set() : null;
+}
+
+export function modelContextRows(
+	settings: ModelContextSetting[] | null,
+	customServers: ReadonlySet<string> | null,
+): ModelContextSetting[] | null {
+	if (settings === null || customServers === null) return null;
+	return settings.filter((model) => !customServers.has(model.provider));
+}
+
+export function modelContextLimitsFor(
+	provider: string,
+	protocolVersion: number | null,
+): ModelContextWindowLimits {
+	return supported(protocolVersion, CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION)
+		? modelContextWindowLimits(provider)
+		: MODEL_CONTEXT_WINDOW_LIMITS;
+}
+
 export function ModelContextRow({
 	model,
+	limits,
 	pending,
 	onChange,
 }: {
 	model: ModelContextSetting;
+	limits: ModelContextWindowLimits;
 	pending: boolean;
 	onChange: (target: ModelContextTarget, override: number | null) => void;
 }) {
@@ -278,7 +341,7 @@ export function ModelContextRow({
 					{t("settings.modelContext.readOnly", {
 						provider: model.provider,
 						tokens: tokens(t, model.contextWindow),
-						min: tokens(t, MODEL_CONTEXT_WINDOW_LIMITS.min),
+						min: tokens(t, limits.min),
 					})}
 				</span>
 			</div>
@@ -303,6 +366,7 @@ export function ModelContextRow({
 							})
 				}
 				override={model.override}
+				limits={limits}
 				disabled={pending}
 				testId={testId}
 				onChange={(override) => onChange(target, override)}
@@ -333,6 +397,7 @@ export function ModelContextRow({
 export function ModelContextControls({
 	protocolVersion,
 	settings,
+	customServers,
 	pending,
 	failed,
 	onChange,
@@ -341,6 +406,7 @@ export function ModelContextControls({
 }: {
 	protocolVersion: number | null;
 	settings: ModelContextSetting[] | null;
+	customServers: ReadonlySet<string> | null;
 	pending: boolean;
 	failed: boolean;
 	onChange: (target: ModelContextTarget, override: number | null) => void;
@@ -351,17 +417,16 @@ export function ModelContextControls({
 	const [expanded, setExpanded] = useState(false);
 	const rowsId = useId();
 	if (!supported(protocolVersion)) return null;
-	const shared = settings?.filter(isSharedModelContextTarget) ?? [];
-	const suggested =
-		settings?.filter(
-			(model) => model.ceiling !== null && model.override !== model.ceiling.contextWindow,
-		).length ?? 0;
-	const external = (settings?.length ?? 0) - shared.length;
+	const rows = modelContextRows(settings, customServers);
+	const gpt = rows?.filter((model) => !isCustomEndpointId(model.provider)) ?? [];
+	const shared = gpt.filter(isSharedModelContextTarget);
+	const external = gpt.length - shared.length;
+	const suggested = gpt.filter(
+		(model) => model.ceiling !== null && model.override !== model.ceiling.contextWindow,
+	).length;
 	const first = shared[0]?.override;
 	const sharedOverride = shared.every((model) => model.override === first) ? first : undefined;
-	const revision = JSON.stringify(
-		settings?.map((model) => [model.provider, model.id, model.override]),
-	);
+	const revision = JSON.stringify(rows?.map((model) => [model.provider, model.id, model.override]));
 	const sharedSummary =
 		sharedOverride === undefined
 			? t("settings.modelContext.customizedByModel")
@@ -380,18 +445,13 @@ export function ModelContextControls({
 	return (
 		<SettingsGroup title={t("settings.modelContext.title")} testId="settings-model-context">
 			{failed ? (
-				<div className="flex items-center gap-8 border-border-muted border-b py-12" role="alert">
-					<p className="tr-text-ui text-text-muted">{t("settings.modelContext.loadFailed")}</p>
-					<Button variant="ghost" size="m" disabled={pending} onClick={onRetry}>
-						{t("common.retry")}
-					</Button>
-				</div>
-			) : settings === null ? (
+				<ModelContextLoadFailed pending={pending} onRetry={onRetry} />
+			) : rows === null ? (
 				<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
 					<span className="tr-text-ui text-text-default">{t("settings.modelContext.global")}</span>
 					<span className="tr-text-metadata text-text-muted">{t("common.loading")}</span>
 				</div>
-			) : settings.length === 0 ? (
+			) : rows.length === 0 ? (
 				<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
 					<span className="tr-text-ui text-text-default">{t("settings.modelContext.global")}</span>
 					<span className="tr-text-metadata text-text-muted">
@@ -455,10 +515,11 @@ export function ModelContextControls({
 						</button>
 						{expanded && (
 							<div id={rowsId} className="flex flex-col gap-16 pb-12">
-								{settings.map((model) => (
+								{rows.map((model) => (
 									<ModelContextRow
 										key={`${model.provider}/${model.id}`}
 										model={model}
+										limits={modelContextLimitsFor(model.provider, protocolVersion)}
 										pending={pending}
 										onChange={onChange}
 									/>
@@ -472,7 +533,16 @@ export function ModelContextControls({
 	);
 }
 
-export function ModelContextSettings() {
+export interface ModelContextState {
+	settings: ModelContextSetting[] | null;
+	pending: boolean;
+	failed: boolean;
+	retry: () => void;
+	change: (target: ModelContextTarget, contextWindow: number | null) => Promise<boolean>;
+	applyCeilings: () => Promise<boolean>;
+}
+
+export function useModelContextSettings(minimumProtocol: number): ModelContextState | null {
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const providerVersion = useAppStore((state) => state.providerVersion);
 	const models = useAppStore((state) => state.models);
@@ -491,20 +561,21 @@ export function ModelContextSettings() {
 			} catch {}
 			if (next === undefined && reportFailure)
 				toast.error(translate("settings.modelContext.updateFailed"));
-			if (current !== sequence.current) return;
+			if (current !== sequence.current) return next !== undefined;
 			if (next === undefined) setFailed(true);
 			else if (providerVersion === useAppStore.getState().providerVersion) {
 				setSettings(next);
 				setFailed(false);
 			}
 			setPending(false);
+			return next !== undefined;
 		},
 		[providerVersion],
 	);
 
 	const synchronize = useCallback(
 		(change?: WsMethodMap["model.setContextWindow"]["params"]) => {
-			if (!supported(protocolVersion)) return;
+			if (!supported(protocolVersion, minimumProtocol)) return Promise.resolve(false);
 			return send(
 				change
 					? () => getTransport().request("model.setContextWindow", change)
@@ -512,13 +583,13 @@ export function ModelContextSettings() {
 				change !== undefined,
 			);
 		},
-		[protocolVersion, send],
+		[protocolVersion, minimumProtocol, send],
 	);
 
 	const applyCeilings = useCallback(() => {
-		if (!supported(protocolVersion)) return;
+		if (!supported(protocolVersion, minimumProtocol)) return Promise.resolve(false);
 		return send(() => getTransport().request("model.applyContextCeilings", {}), true);
-	}, [protocolVersion, send]);
+	}, [protocolVersion, minimumProtocol, send]);
 
 	useEffect(() => {
 		void synchronize();
@@ -527,17 +598,37 @@ export function ModelContextSettings() {
 		};
 	}, [models, synchronize]);
 
+	if (!supported(protocolVersion, minimumProtocol)) return null;
+	return {
+		settings,
+		pending,
+		failed,
+		retry: () => void synchronize(),
+		change: (target, contextWindow) => synchronize({ target, contextWindow }),
+		applyCeilings,
+	};
+}
+
+export function ModelContextSettings({
+	customEndpoints,
+}: {
+	customEndpoints: CustomEndpointsState | null;
+}) {
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const context = useModelContextSettings(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
+	if (!context) return null;
 	return (
 		<ModelContextControls
 			protocolVersion={protocolVersion}
-			settings={settings}
-			pending={pending}
-			failed={failed}
-			onRetry={() => void synchronize()}
-			onApplyCeilings={() => void applyCeilings()}
+			settings={context.settings}
+			customServers={customServerIds(customEndpoints)}
+			pending={context.pending}
+			failed={context.failed}
+			onRetry={context.retry}
+			onApplyCeilings={() => void context.applyCeilings()}
 			onChange={(target, override) => {
-				if (pending) return;
-				void synchronize({ target, contextWindow: override });
+				if (context.pending) return;
+				void context.change(target, override);
 			}}
 		/>
 	);

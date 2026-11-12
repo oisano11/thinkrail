@@ -418,7 +418,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     Third: web-access — the first wrap of a **third-party** pi package (`pi-web-access`), so there is no
     package of ours to publish and delivery collapses to the server half; its renderers stay app-local
     until the components they use join the SDK. It loads everything the package declares, as `pi install`
-    would — tools and its `librarian` skill — and is the first extension with skills, so the switch now
+    would, plus the `librarian` skill upstream later dropped, which the extension now owns — and is the
+    first extension with skills, so the switch now
     drops an extension's skills with its tools (launchers stage them under an owner folder so ownership
     survives flattening). Detail: [[module-thinkrail-extensions]].
 
@@ -521,5 +522,6 @@ dependency. This keeps test process drivers outside both launchers and the serve
   This includes PR revalidation on window focus; terminal-busy checks are close actions and Central quota
   resumes on visibility changes, not ordinary focus. Sync and fire-and-forget cases use
   `@thinkrail/shared/spawn`; bespoke bounded runners set the option directly. Exempt: spawns that inherit
-  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script) and shell
-  probes that are no-ops on win32 (`shellEnv`).
+  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script), shell
+  probes that are no-ops on win32 (`shellEnv`), and the file-manager reveal (`explorer.exe` honors the
+  hide flag by opening its folder window invisibly).

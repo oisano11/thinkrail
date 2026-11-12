@@ -52,6 +52,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	canMarkCompletionUnread,
+	compareProjectRank,
 	customMessageText,
 	DEFAULT_CONFIG,
 	type ExtensionSettingValues,
@@ -97,6 +98,7 @@ import {
 	nullProto,
 	parseSkillInvocation,
 	randomId,
+	randomUuid,
 	readLayoutNavigationClock,
 	shallowEqualArrays,
 	tupleKey,
@@ -126,6 +128,7 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
+import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,
@@ -169,6 +172,10 @@ export interface FileReveal {
 	column?: number;
 	length?: number;
 	tick: number;
+}
+export interface FileClipboard {
+	workspaceId: string;
+	path: string;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -219,6 +226,7 @@ export function isFileComparison<T extends { kind: string; before?: string | und
 	return tab.kind === "diff" && tab.before !== undefined;
 }
 export type ChangesLayout = "stacked" | "single";
+export type MarkdownOutlineSide = "left" | "right";
 type FilesMode = "all" | "changed";
 export type FilesScrollView = "all" | "changedList" | "changedTree";
 export interface FilesTreeView {
@@ -496,6 +504,17 @@ export interface MarkedUnread {
 	held: boolean;
 }
 
+export interface ChatReadingAnchor {
+	rowId: string;
+	offset: number;
+}
+
+export interface ComposerEdit {
+	id: string;
+	kind: "replace" | "paste";
+	text: string;
+}
+
 export interface SessionRuntime {
 	turns: ChatTurn[];
 	turnIdByMessageIndex?: (string | null)[];
@@ -514,6 +533,9 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	composerEdit: ComposerEdit | null;
+	promptImages: PromptImagesState;
+	readingAnchor: ChatReadingAnchor | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -546,6 +568,9 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		composerEdit: null,
+		promptImages: newPromptImagesState(),
+		readingAnchor: null,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -613,7 +638,7 @@ function settleCompactionTurn(
 ): ChatTurn[] {
 	const outcome = compactionOutcome(event);
 	const index = turns.findLastIndex((t) => t.kind === "compaction" && t.status === "running");
-	if (index < 0) return [...turns, { kind: "compaction", id: crypto.randomUUID(), ...outcome }];
+	if (index < 0) return [...turns, { kind: "compaction", id: randomUuid(), ...outcome }];
 	return turns.map((t, i) => (i === index ? { kind: "compaction", id: t.id, ...outcome } : t));
 }
 
@@ -658,7 +683,7 @@ function appendRetryTurn(
 			...rt.turns.filter((t) => !(t.kind === "retry" && t.source === source)),
 			{
 				kind: "retry",
-				id: crypto.randomUUID(),
+				id: randomUuid(),
 				source,
 				attempt: event.attempt,
 				maxAttempts: event.maxAttempts,
@@ -707,7 +732,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (event.message.role === "assistant")
 				return {
 					...rt,
-					currentAssistantId: crypto.randomUUID(),
+					currentAssistantId: randomUuid(),
 					attemptAssistantId: null,
 					turns: clearTurnStreaming(rt.turns),
 				};
@@ -731,7 +756,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				}
 				return {
 					...rt,
-					turns: [...rt.turns, { kind: "user", id: crypto.randomUUID(), message }],
+					turns: [...rt.turns, { kind: "user", id: randomUuid(), message }],
 				};
 			}
 			return rt;
@@ -747,7 +772,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							? ame.error
 							: null;
 			if (!snapshot) return rt;
-			const id = rt.currentAssistantId ?? crypto.randomUUID();
+			const id = rt.currentAssistantId ?? randomUuid();
 			const streaming = !(ame.type === "done" || ame.type === "error");
 			const turn: ChatTurn = { kind: "assistant", id, message: snapshot, streaming };
 			return {
@@ -772,7 +797,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "backgroundCommandCompletion",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -786,7 +811,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "subagentCompletion",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
 							timestamp: event.message.timestamp,
@@ -801,7 +826,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "reviewFix",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
 							timestamp: event.message.timestamp,
@@ -816,7 +841,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "continuationRequest",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -830,7 +855,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 						...rt.turns,
 						{
 							kind: "handoff",
-							id: crypto.randomUUID(),
+							id: randomUuid(),
 							details: event.message.details,
 							timestamp: event.message.timestamp,
 						},
@@ -880,12 +905,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			const closer: ChatTurn = failure
 				? {
 						kind: "error",
-						id: crypto.randomUUID(),
+						id: randomUuid(),
 						text: failure.message,
 						failure: failure.failure,
 						recovery: "try-again",
 					}
-				: { kind: "system", id: crypto.randomUUID(), endedAt: Date.now() };
+				: { kind: "system", id: randomUuid(), endedAt: Date.now() };
 			return {
 				...rt,
 				turns: insertRoundCloser(
@@ -903,7 +928,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "compaction_start":
 			return {
 				...rt,
-				turns: [...rt.turns, { kind: "compaction", id: crypto.randomUUID(), status: "running" }],
+				turns: [...rt.turns, { kind: "compaction", id: randomUuid(), status: "running" }],
 			};
 		case "compaction_end": {
 			const settled = settleCompactionTurn(rt.turns, event);
@@ -943,6 +968,19 @@ function reduceExtUi(
 	request: Exclude<ExtUiRequest, { kind: "setTitle" }>,
 ): SessionRuntime {
 	switch (request.kind) {
+		case "setEditorText":
+			return { ...rt, composerEdit: { id: request.id, kind: "replace", text: request.text } };
+		case "pasteToEditor": {
+			const pending = rt.composerEdit;
+			return {
+				...rt,
+				composerEdit: {
+					id: request.id,
+					kind: pending?.kind ?? "paste",
+					text: `${pending?.text ?? ""}${request.text}`,
+				},
+			};
+		}
 		case "dismiss":
 			if (rt.pendingExtUi?.id === request.id) {
 				const [next, ...rest] = rt.extUiQueue;
@@ -968,7 +1006,7 @@ function reduceExtUi(
 			const kind = request.level === "error" ? "error" : "system";
 			return {
 				...rt,
-				turns: [...rt.turns, { kind, id: crypto.randomUUID(), text: request.message }],
+				turns: [...rt.turns, { kind, id: randomUuid(), text: request.message }],
 			};
 		}
 		case "setStatus": {
@@ -1157,6 +1195,8 @@ interface AppState {
 	fileLineWidthBounded: boolean;
 	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
+	markdownOutlineVisible: boolean | null;
+	markdownOutlineSide: MarkdownOutlineSide;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1327,6 +1367,8 @@ interface AppState {
 	setChangesView: (view: "list" | "tree") => void;
 	filesMode: FilesMode;
 	setFilesMode: (mode: FilesMode) => void;
+	fileClipboard: FileClipboard | null;
+	setFileClipboard: (clipboard: FileClipboard | null) => void;
 	filesTreeByWorkspace: Record<string, FilesTreeView>;
 	hydrateFilesTree: (views: Record<string, FilesTreeView>) => void;
 	setFilesTreeExpanded: (workspaceId: string, paths: readonly string[], expanded: boolean) => void;
@@ -1478,6 +1520,12 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	consumeComposerEdit: (sessionId: string, editId: string) => void;
+	updateChatPromptImages: (
+		sessionId: string,
+		update: (current: PromptImagesState) => PromptImagesState,
+	) => void;
+	setChatReadingAnchor: (sessionId: string, anchor: ChatReadingAnchor | null) => void;
 	dismissSessionNotice: (sessionId: string) => void;
 	silenceNotice: (notice: ProviderWarning) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
@@ -1508,6 +1556,8 @@ interface AppState {
 	closeSearch: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
+	setMarkdownOutlineVisible: (visible: boolean) => void;
+	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -1528,7 +1578,11 @@ interface AppState {
 	dismissToast: (id: string) => void;
 }
 
-function sortProjects(projects: Project[]): Project[] {
+function sortOpenProjects(projects: Project[]): Project[] {
+	return [...projects].sort(compareProjectRank);
+}
+
+function sortRecentProjects(projects: Project[]): Project[] {
 	return [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
 }
 
@@ -2191,6 +2245,8 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setStatus",
 	"setWidget",
 	"setTitle",
+	"setEditorText",
+	"pasteToEditor",
 	"notice",
 ]);
 
@@ -2473,6 +2529,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewFocusRequest: null,
 	changesView: "tree",
 	filesMode: "all",
+	fileClipboard: null,
 	filesTreeByWorkspace: {},
 	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
@@ -2515,6 +2572,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
+	markdownOutlineVisible: null,
+	markdownOutlineSide: "right",
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -2724,7 +2783,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		speech,
 	) =>
 		set((state) => {
-			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			const openProjects = sortOpenProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
 				welcomeProtocolVersion: protocolVersion,
@@ -2734,7 +2793,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {},
 				mcpByWorkspace: selectSupportsMcp({ protocolVersion }) ? state.mcpByWorkspace : {},
 				projects: openProjects,
-				recentProjects: sortProjects(recentProjects),
+				recentProjects: sortRecentProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
@@ -2749,10 +2808,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
-			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			const openProjects = sortOpenProjects(projects.filter((project) => project.closed !== true));
 			return {
 				projects: openProjects,
-				recentProjects: sortProjects(recentProjects),
+				recentProjects: sortRecentProjects(recentProjects),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
 			};
@@ -2762,10 +2821,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const projects =
 				project.closed === true
 					? state.projects.filter((candidate) => candidate.id !== project.id)
-					: sortProjects(upsertProject(state.projects, project));
+					: sortOpenProjects(upsertProject(state.projects, project));
 			return {
 				projects,
-				recentProjects: sortProjects(upsertProject(state.recentProjects, project)),
+				recentProjects: sortRecentProjects(upsertProject(state.recentProjects, project)),
 				...reconcileProjectNavigation(state, projects),
 				...pruneExpandedProjects(state, projects),
 			};
@@ -2852,6 +2911,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
+				fileClipboard:
+					state.fileClipboard?.workspaceId === workspaceId ? null : state.fileClipboard,
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
@@ -3431,6 +3492,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	setChangesView: (view) => set({ changesView: view }),
 	setFilesMode: (filesMode) => set({ filesMode }),
+	setFileClipboard: (fileClipboard) => set({ fileClipboard }),
 	hydrateFilesTree: (filesTreeByWorkspace) => set({ filesTreeByWorkspace }),
 	setFilesTreeExpanded: (workspaceId, paths, expanded) =>
 		set((s) =>
@@ -4478,7 +4540,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...consumeFailureRecoveries(rt.turns),
 					{
 						kind: "user",
-						id: crypto.randomUUID(),
+						id: randomUuid(),
 						message: {
 							role: "user",
 							content:
@@ -4501,7 +4563,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
-				turns: [...rt.turns, { kind: "error", id: crypto.randomUUID(), text }],
+				turns: [...rt.turns, { kind: "error", id: randomUuid(), text }],
 			})),
 		),
 	appendCompactionFailureUnlessObserved: (sessionId, observedTurnIds, detail) =>
@@ -4516,7 +4578,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							...rt,
 							turns: [
 								...rt.turns,
-								{ kind: "compaction", id: crypto.randomUUID(), status: "failed", detail },
+								{ kind: "compaction", id: randomUuid(), status: "failed", detail },
 							],
 						};
 			}),
@@ -4612,6 +4674,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	consumeComposerEdit: (sessionId, editId) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) =>
+				rt.composerEdit?.id === editId ? { ...rt, composerEdit: null } : rt,
+			),
+		),
+	updateChatPromptImages: (sessionId, update) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => {
+				const promptImages = update(rt.promptImages);
+				return promptImages === rt.promptImages ? rt : { ...rt, promptImages };
+			}),
+		),
+	setChatReadingAnchor: (sessionId, readingAnchor) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) =>
+				rt.readingAnchor?.rowId === readingAnchor?.rowId &&
+				rt.readingAnchor?.offset === readingAnchor?.offset
+					? rt
+					: { ...rt, readingAnchor },
+			),
+		),
 	dismissSessionNotice: (sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => (rt.notice ? { ...rt, notice: null } : rt))),
 	silenceNotice: (notice) =>
@@ -4718,6 +4802,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
+	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
+	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
@@ -4882,7 +4968,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				t.durationMs === toast.durationMs,
 		);
 		if (twin) return twin.id;
-		const id = crypto.randomUUID();
+		const id = randomUuid();
 		set((s) => {
 			const next = [...s.toasts, { ...toast, id }];
 			let actionlessToDrop = Math.max(0, next.length - MAX_TOASTS);

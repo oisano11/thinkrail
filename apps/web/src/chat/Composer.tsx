@@ -53,7 +53,12 @@ import {
 	type ModelSelection,
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
-import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
+import {
+	imagePasteDropHandlers,
+	PromptImageChips,
+	type PromptImagesOwner,
+	usePromptImages,
+} from "./promptImages";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -166,6 +171,7 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	imageOwner?: PromptImagesOwner;
 	isStreaming: boolean;
 	awaitingResponse: boolean;
 	growthLimit: ComposerGrowthLimit;
@@ -197,6 +203,7 @@ interface ComposerProps {
 
 export interface ComposerHandle {
 	insertText: (text: string) => void;
+	applyEdit: (kind: "replace" | "paste", text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
@@ -208,6 +215,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	{
 		value,
 		onChange,
+		imageOwner,
 		isStreaming,
 		awaitingResponse,
 		growthLimit,
@@ -238,7 +246,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages();
+	const attachedImages = usePromptImages(imageOwner);
 	const { images } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;
@@ -311,12 +319,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const focusSelection = usePendingSelection(ref, setCaret);
 
 	const replaceDraft = useCallback(
-		(text: string, caret?: number) => {
+		(text: string, caret?: number, focus = true) => {
+			const selection = caret ?? text.length;
 			recallIdxRef.current = null;
 			setSlotSession(null);
 			setSubmitError(null);
 			onChange(text);
-			focusSelection(caret ?? text.length);
+			if (focus) focusSelection(selection);
+			else setCaret(selection);
 		},
 		[onChange, focusSelection],
 	);
@@ -397,6 +407,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	useImperativeHandle(handleRef, () => ({
 		insertText: (text: string) => replaceDraft(text),
+		applyEdit: (kind: "replace" | "paste", text: string) => {
+			const textarea = ref.current;
+			const focused = textarea !== null && textarea === document.activeElement;
+			if (kind === "replace") {
+				replaceDraft(text, text.length, focused);
+				return;
+			}
+			const start = focused ? textarea.selectionStart : value.length;
+			const end = focused ? textarea.selectionEnd : value.length;
+			replaceDraft(
+				`${value.slice(0, start)}${text}${value.slice(end)}`,
+				start + text.length,
+				focused,
+			);
+		},
 		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
 			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {

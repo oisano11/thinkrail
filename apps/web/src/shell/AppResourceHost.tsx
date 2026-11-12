@@ -113,6 +113,9 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
 	const fontScale = useSyncExternalStore(subscribeFontScale, currentFontScale, () => 1);
+	const markdownOutlineVisible = useAppStore((state) => state.markdownOutlineVisible);
+	const markdownOutlineSide = useAppStore((state) => state.markdownOutlineSide);
+	const setMarkdownOutlineVisible = useAppStore((state) => state.setMarkdownOutlineVisible);
 	const mobile = usePhoneViewport();
 	const preferences = useMemo<ResourcePreferences>(
 		() => ({
@@ -120,8 +123,18 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 			fileLineWidthBounded,
 			codeRowHeight: scaledCodeRowHeight(fontScale),
 			codeFontSize: scaledCodeFontSize(fontScale),
+			markdownOutlineVisible,
+			setMarkdownOutlineVisible,
+			markdownOutlineSide,
 		}),
-		[fileLineWidth, fileLineWidthBounded, fontScale],
+		[
+			fileLineWidth,
+			fileLineWidthBounded,
+			fontScale,
+			markdownOutlineVisible,
+			setMarkdownOutlineVisible,
+			markdownOutlineSide,
+		],
 	);
 	const environment = useMemo<ResourceEnvironment>(() => ({ mobile }), [mobile]);
 	return (

@@ -74,6 +74,8 @@ export interface ResourceHost {
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
 }
 
+export type MarkdownOutlineSide = "left" | "right";
+
 export interface ResourcePreferences {
 	fileLineWidth: number;
 	fileLineWidthBounded: boolean;
@@ -85,6 +87,9 @@ export interface ResourcePreferences {
 	codeRowHeight: number;
 	/** The code font size in pixels, scaled the same way; Monaco takes it as an option value. */
 	codeFontSize: number;
+	markdownOutlineVisible: boolean | null;
+	setMarkdownOutlineVisible: (visible: boolean) => void;
+	markdownOutlineSide: MarkdownOutlineSide;
 }
 
 const ResourceHostContext = createContext<ResourceHost | null>(null);

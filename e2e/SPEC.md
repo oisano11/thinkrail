@@ -87,7 +87,12 @@ headless workflow suite keeps its local PI-auth mode. Concurrent provider turns 
 cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's
 normal environment, then removes PI's complete ambient provider/cloud credential environment surface before
 starting Playwright or any host. The hosts also receive the same complete hermetic `PATH` as the default
-suite. This split is load-bearing: build
+suite: the fake bin plus `/usr/bin`, `/bin`, `/usr/sbin`, `/sbin` on POSIX; on Windows, where none of those
+exist, the fake bin plus the directory of the runner's `git.exe`, `%SystemRoot%\System32` and `%SystemRoot%`.
+Those ambient Windows directories are not lane-owned, so setup fails closed if any holds a `pi`, `central` or
+`code` under any `PATHEXT` suffix (a `.cmd` forwarder to git cannot replace them: Bun rejects cmd.exe
+metacharacters in `.cmd` arguments, which the host's `git --format=%(…)` calls carry), and every host-PATH
+`pi` guard resolves names with those suffixes. This split is load-bearing: build
 tooling may need developer-installed executables and caller environment, while exact-model preflight must
 prove Central without an API key, token, Google ADC/project/location, or AWS profile/key/token/container/
 web-identity/config source making another provider available. A drift canary derives every uppercase
@@ -138,7 +143,8 @@ restart; it proves the dock's finished total, the inspector's per-kind fold, a r
 page, the archived log and an interrupted run's missing log. An archived in-flight record carries no
 authority — the host reads it as interrupted — so this is not a seeded running resource. `resetApp` clears
 the archive with the rest of the lane's state. Tagged provider-backed probes launch real commands and
-children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, verify chat
+children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, fold a
+one-row dock and keep that fold across the inspector, verify chat
 isolation, reload and closed-inspector completion, and exercise individual Stop and confirmed Stop all. They never
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
 browser agent execution. `attention-background-work.live` pins the background-work unread hold end to end:
@@ -150,7 +156,9 @@ publishes an unread completion and the worktree row shows running, not a dot; wi
 absolute path of the runner's `bun`, since the host's hermetic `PATH` has none. It adds a user server
 through the Settings form while the workspace's persisted chat is open (entering a workspace auto-opens
 its latest chat, so the test waits for that tab first instead of racing it), sees it Connected · 4 tools
-once that chat reloads, and disabled for that chat from the Resources inspector, then removes it; it opens a chat from a not-running
+once that chat reloads, selects it in the Resources inspector — its detail lists the chat's seeded
+`mcp__fixture__echo` call (transcript text, not execution authority) and expands it into the transcript's
+card body — and disables it for that chat from the detail header, then removes it; it opens a chat from a not-running
 server's row, reconnects that server per chat once it fails and shows its masked log, and names an
 unreadable user `mcp.json` with an edit hint; and it proves a repository-defined server flags the chat's
 attention marker, waits for Review & approve, and starts once approved. Each test removes the `mcp.json`
@@ -618,7 +626,8 @@ focus, tabs/question/footer at one y across paging and choosing, notes and Other
 place under a height that never shrinks, Discuss marking/cancelling/sending (asserted in the session file),
 the receipt's fold, per-question Options and remembered manual fold, and the keyboard model (arrows only
 move, Enter picks, Space opens a note, `d` discusses, fields park on their own row, the platform chord
-submits or nudges) (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
+submits or nudges), and an open note closing on a background press or on focus leaving the card without
+stealing the press aimed at a row or Add note below it (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file

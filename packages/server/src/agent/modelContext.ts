@@ -6,6 +6,7 @@ import {
 	type ModelContextCeiling,
 	type ModelContextSetting,
 	type ModelContextTarget,
+	modelContextWindowLimits,
 } from "@thinkrail/contracts";
 import { applyEdits, findNodeAtLocation, modify, type Node, parseTree } from "jsonc-parser";
 import { usePiRuntime } from "./agentSessionManager";
@@ -102,10 +103,14 @@ export function setModelContextWindow(
 	target: ModelContextTarget,
 	contextWindow: number | null,
 ): Promise<ModelContextSetting[]> {
-	if (contextWindow !== null && !isModelContextWindow(contextWindow)) {
+	const limits =
+		target === "available"
+			? MODEL_CONTEXT_WINDOW_LIMITS
+			: modelContextWindowLimits(target.provider);
+	if (contextWindow !== null && !isModelContextWindow(contextWindow, limits)) {
 		return Promise.reject(
 			new Error(
-				`Context window must be a whole number between ${MODEL_CONTEXT_WINDOW_LIMITS.min.toLocaleString("en-US")} and ${MODEL_CONTEXT_WINDOW_LIMITS.max.toLocaleString("en-US")} tokens`,
+				`Context window must be a whole number between ${limits.min.toLocaleString("en-US")} and ${limits.max.toLocaleString("en-US")} tokens`,
 			),
 		);
 	}

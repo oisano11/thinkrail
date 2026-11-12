@@ -22,8 +22,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,
-  `NOT_GIT` and `ALREADY_OPEN` (the two `project.open` refusals: a folder that is not a repository, and a
-  folder already owned by a workspace),
+  `NOT_GIT`, `ALREADY_OPEN` and `PROJECT_BOOTSTRAPPING` (the three `project.open` refusals: a folder that is
+  not a repository, a folder already owned by a workspace, and a folder another request is still
+  bootstrapping into a repository — an expected, transient refusal Error Tracking must not count as a bug),
   `PROJECT_CLONE_INVALID`, `PROJECT_CLONE_FAILED`, and `PROJECT_CLONE_CLEANUP_FAILED` (input
   correction, Git failure, and incomplete cleanup requiring filesystem intervention),
   `CHATS_CONTAINER` / `CHAT_WORKSPACE` / `NOT_A_CHAT` /
@@ -36,7 +37,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `CONTINUATION_UNKNOWN` (`chat.continuationStatus` for an operation the host neither holds nor linked —
   a restart lost it mid-flight; the card offers Retry), `CONTINUATION_IN_FLIGHT` (`chat.continue` for
   another project while the chat is already being continued — the first gesture is never silently
-  joined by a different choice), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
+  joined by a different choice), `COPY_TOO_LARGE` (a Files tree folder paste with more entries than the host copies — nothing was written; the client words it), `ENTRY_CHANGED` (an entry a Files tree paste or a trash claim was acting on was replaced, moved out of the worktree or turned into a link mid-operation — the host stopped instead of following it; a paste keeps what it already wrote, a delete or a whole-file revert left the entry in place; the client words it), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
   finish in its budget, or could not run — the host's logged classifier; the client only sees the search
   end `failed`), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
@@ -60,7 +61,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
   ([[submodule-server-host]]), and the page treats it as an ordinary retryable failure — and **`GIT_TIMEOUT`**
   — a sync git killed at its deadline ([[submodule-server-git]]); an older client wraps it like any unknown
-  code, so it needs no protocol bump.
+  code, so it needs no protocol bump. One code is named by the client and never sent by the host:
+  **`FRAME_TOO_LARGE`**, a request refused before sending because its frame exceeds `WS_MAX_FRAME_BYTES`
+  (below) — the composer hands that prompt back to its draft instead of losing it.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -112,6 +115,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `parsePiPackageInput` (§ pi packages),
+  **`isValidTemplateName(name)`** (the one prompt-template name rule — the host's traversal gate in
+  [[submodule-server-templates]] and the web template editor's inline check call this same function) +
+  **`isWindowsDeviceName(name)`** (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9` and the
+  `¹²³` variants, any case, alone or before spaces or an extension, as Windows 10 reads `NUL .md` as `NUL`;
+  also the clone destination's device-name check),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
@@ -135,7 +143,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`, and
+  feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
 - **Deployment obligation:** wire contracts describe host behavior and compatibility, never the launcher
@@ -241,9 +250,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
-    compaction — pi places it before the kept tail and drops the summarized messages, so forwarding it is
-    what makes the compaction boundary survive reload/reopen instead of rendering a transcript that begins
-    mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
+    compaction — pi places it before the kept tail and drops the summarized messages from **model**
+    context. The host's `getMessages` display transcript puts those summarized turns back in front of
+    the marker so reload/reopen can still review them; the marker is what keeps the cut visible rather
+    than a transcript that begins mid-conversation. The summary reflects the now-live session after a disk re-open). The role universe a
     host may send is pinned by the runtime **`isTranscriptMessageRole(role)`** guard: the single source for
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
@@ -268,7 +278,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     it into the session, and an older host simply omits it (the client shows its generic label).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
-    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. One member is
+    `setTitle`/`setEditorText`/`pasteToEditor`/`dismiss` are fire-and-forget), carried on the
+    `pi.extensionUi` channel. `setEditorText` and `pasteToEditor` (`EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION`,
+    v115) carry `text` for the addressed session's composer: the first replaces the draft (an empty string
+    clears it), the second inserts like a paste. Older clients ignore the unknown kinds. One member is
     host-authored, not pi's: `notice` (v99) carries a closed `ProviderWarning` code for a session, such
     as the Anthropic extra-usage warning. It has no text, so the client localizes it, and older clients
     ignore the unknown kind. A round-trip
@@ -316,7 +329,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     [[submodule-web-chat]].
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
-  changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
+  changes the project's id or deletes its workspace associations — plus optional **`rank`**, the host-owned
+  place among the open projects (highest first; absent reads as `lastOpened`, so a pre-v117 record or host
+  keeps the newest-opened order). The pure **`projectRank`** / **`compareProjectRank`** (id breaks ties)
+  are the one ordering, so the host's `project.list` and every client's rail agree — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
   plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
@@ -377,7 +393,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   Pull request segments derive their next action from, independent of whether a review exists),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
+  **`WorkspacePathMatch`** (a `workspace.resolvePath` answer: `workspaceId`, `projectId`, and a POSIX
+  `relativePath` contained in that workspace),
   `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
+  the Files tree's two mutations from **`FS_MUTATIONS_PROTOCOL_VERSION`** (v118): `fs.copy`
+  (`{ sourceWorkspaceId, sourcePath, destinationWorkspaceId, destinationDirectory }` → `{ path }`, a file,
+  folder or symlink copied — never moved, even across workspaces — under a collision-free ` copy` / ` copy N`
+  name, refused with `COPY_TOO_LARGE` for a folder past the host's entry bound, stopped with
+  `ENTRY_CHANGED` when an entry changes under it) and `fs.delete` (`{ workspaceId, path }` → ack, a move to
+  the OS trash, `ENTRY_CHANGED` when the entry changed while it was claimed); a client hides both from
+  older hosts,
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
@@ -682,7 +707,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   focused in-app item, and `open-settings`, open Settings unless a modal is open), and its one action `quit()` asks the host for an ordinary coordinated quit. The
   notification bridge exposes `show({ title, subtitle?, body, silent? })` (fire-and-forget OS notification,
   no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
-  when DevTools has renderer focus, unlike `document.hasFocus()`. A browser
+  when DevTools has renderer focus, unlike `document.hasFocus()`. The deep-link bridge pushes
+  `NativeOpenFileRequest` (`file`, `line`, optional `column`) from an OS `thinkrail://` URL; it is a
+  desktop-only subscription seam, not host-wire state. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state
@@ -702,7 +729,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
   `PROJECT_RENAME_PROTOCOL_VERSION` pins its v85 introduction so a newer client omits the action against
-  an older host), **`project.inspect`** (classify a path) + **`project.init`**
+  an older host), **`project.move`** (`{ id, targetId, placement: "before" | "after" }` → the moved
+  `Project`; places one open repository project next to another — never the Chats container — and
+  broadcasts each record whose `rank` changed; `PROJECT_ORDER_PROTOCOL_VERSION` pins its v117
+  introduction), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.create`** (`{ parentPath, name, displayName? }` → the opened
   `Project`: make the folder `name` under `parentPath`, creating missing parents, then the same bootstrap as
   init, and name the project `displayName` — what the user typed — when it differs from the folder;
@@ -745,21 +775,27 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `defaultEffort ?? "medium"`, clamped with Pi's `clampThinkingLevel` when a model exists) /
   **`model.contextSettings`** / **`model.setContextWindow`** (v76; both return
   **`ModelContextSetting[]`** — every available model's `provider`/`id`/`name`, pi's effective
-  `contextWindow`, the explicit models.json `override` or `null` for pi's default, and at v103 a
-  **`ceiling`**: the largest window any other interface of the same model declares, with the `api` that
+  `contextWindow`, the explicit models.json `override` or `null` for pi's default, and at v120
+  (`CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION`) a **`ceiling`**: the largest window any other interface of the same model declares, with the `api` that
   declares it, or `null` when nothing declares more. A setting whose window — its ceiling when one
   exists, otherwise pi's value — falls below the range's minimum is listed read-only, since
   **`isModelContextWritable`** is what a control must check before offering a change; the ceiling is
   derived from pi's catalog and the registered providers, never from a model-id table. **`model.applyContextCeilings`**
-  (v103) takes no parameters, writes the ceiling onto every writable row that has no override yet, and
+  (v120) takes no parameters, writes the ceiling onto every writable row that has no override yet, and
   returns the same array, so one call fills the whole list in. The mutation takes
   `{target: "available" | {provider,id}, contextWindow: number | null}`: `null` removes the override;
-  a number must satisfy **`isModelContextWindow`** within **`MODEL_CONTEXT_WINDOW_LIMITS`**
-  (272,000–1,000,000), the app's editing policy rather than a verified provider capacity, enforced on
-  both sides. External values outside it are read without clamping, and the `available` target covers
-  only settings **`isSharedModelContextTarget`** accepts (writable, and no override or one inside the
-  range): an override the app could not have written is changed only by naming its `{provider,id}`, and a
-  named target that cannot hold the requested window is refused rather than clamped. Saves emit the
+  a number must satisfy **`isModelContextWindow`** within the target's
+  **`modelContextWindowLimits(provider)`** — **`MODEL_CONTEXT_WINDOW_LIMITS`** (272,000–1,000,000) for
+  `available` and every provider but a custom server's — the app's editing policy rather than a verified
+  provider capacity, enforced on both sides. From **`CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`** (v116) the
+  list also carries every available `custom-*` provider model (`isCustomEndpointId`), editable only by a
+  targeted save within **`CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS`** (1,024–10,000,000: a guard against typos,
+  wide enough for any served window); an older host refuses that target as ineligible. External values
+  outside a range are read without clamping, and the `available` target covers only settings
+  **`isSharedModelContextTarget`** accepts (not a custom server's, writable, and no override or one
+  inside the range): an override the app could not have written is changed only by naming its
+  `{provider,id}`, and a named target that cannot hold the requested window is refused rather than
+  clamped. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
   **`cacheWarming.get`** / **`cacheWarming.set`** (v111, `CACHE_WARMING_SETTINGS_PROTOCOL_VERSION`; both
   return a **`CacheWarmingSetting`** — pi's `cacheWarming` mode, one of **`CACHE_WARMING_MODES`** `off` /
@@ -771,8 +807,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`customEndpoints.remove`** (v101, `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; the user's OpenAI-compatible
   servers stored as pi `models.json` providers whose ids carry **`CUSTOM_ENDPOINT_ID_PREFIX`** (`custom-`,
   tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
-  `contextWindow` / `maxTokens` / `reasoning` / `vision` are `null` when it did not say (distinct from an
-  explicit `false`, so a re-detect can clear a capability), and a `tools` hint is never saved. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
+  `contextWindow` / `maxTokens` / `reasoning` / `vision` / `chatTemplateThinking` are `null` when it did
+  not say (distinct from an explicit `false`, so a re-detect can clear a capability), and a `tools` hint is
+  never saved. A listed `contextWindow` is the detected one; a window the user set is a
+  `model.contextSettings` override and never travels in a draft. `chatTemplateThinking` is additive on the wire: a draft without it is read as `null`, so an
+  older client never changes a saved thinking format. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
   that endpoint's saved key host-side, only for its unchanged address) and returns either the normalized
   `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,
   `timeout`, `unreachable`, `not-openai` with an optional HTTP `status`, `no-models`) so the client
@@ -817,13 +856,17 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
+  **`workspace.resolvePath`** (`{ path }` → `WorkspacePathMatch | null`, v119,
+  **`WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION`**: the open workspace that holds an absolute native path, matched
+  on real paths so a symlinked or `/tmp`-style spelling of either side still matches; `null` outside every
+  open workspace and for `..`, `.git` or a root itself — [[submodule-server-workspaces]]) /
   **`workspace.rename`** (`{ id, name }` → the locked updated `Workspace`; managed worktrees only;
   changes the display name while preserving the Git branch + cwd, and broadcasts the ordinary full-snapshot
   `workspace.updated`; `WORKSPACE_RENAME_PROTOCOL_VERSION` pins its v55 introduction so a newer client with
   this action omits it against an older host) / **`workspace.openReview`** (the active
   branch's optional `OpenBranchReview` metadata; optional `allowCached: true` permits a settled host
   cache hit while omission preserves the original force-fresh behavior for older independently shipped
-  clients; either form still joins a lookup already in flight) / **`workspace.branchStatus`** (v87, same
+  clients; ordinary concurrent lookups share the in-flight generation; a fresh lookup starts a new generation, and callers of the superseded generation adopt the newer generation's answer) / **`workspace.branchStatus`** (v87, same
   params and freshness rules → `BranchStatus`; supersedes `openReview` for v87 clients, which stays for
   older ones; v88 adds `skipFetch: true` — a CI poll: a fresh review lookup without fetching origin) /
   **`workspace.push`** (v87, `{ workspaceId, branch, confirmBase? }` → `{ dirtyFiles }`: publish or
@@ -984,7 +1027,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
   published when a launcher finds a newer release, then replaced as a v70 host-run moves through
   running/succeeded/failed; absent on discovery failure/no-update / **`project.updated`** — the
-  full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
+  full persisted `Project` snapshot after open/reopen/close/rename/move, including `closed` membership and `rank`, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
@@ -1047,7 +1090,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   still considers unresolved, so the host can release everything else. `resume` exists because a receipt is only
   as reliable as the socket carrying it and nothing would ever re-send a lost one: restating the live set beats
   confirming the confirmations. This behavior is protocol-versioned — a replaying UI must never run against a
-  pre-dedup host.
+  pre-dedup host. **`WS_MAX_FRAME_BYTES`** (16 MiB, UTF-8 bytes) is the largest client→host frame: the
+  host's `maxPayloadLength` and the size above which `WsTransport.request` refuses to send. A frame over it
+  would close the socket and be replayed on every reconnect, so a message's `REQUEST_IMAGE_BASE64_BUDGET`
+  (12 MiB) stays under it with room for the text. It equals Bun's default, which every earlier host
+  already enforced, so it needs no protocol bump.
 
 ## Chat Resources
 

@@ -127,7 +127,7 @@ import {
 	surveyResponse,
 } from "../feedback";
 import { fontsDir, listInstalledFonts, readUserFonts } from "../fonts";
-import { readDir, readFile } from "../fs";
+import { copyWorktreeEntry, deleteWorktreeEntry, readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
@@ -166,6 +166,7 @@ import {
 	inspectCloneDestination,
 	inspectProjectPath,
 	listProjects,
+	moveProject,
 	openProject,
 	renameProject,
 	setProjectGroupEnabled,
@@ -225,7 +226,7 @@ import {
 	updateTodo,
 } from "../todos";
 import { forgetWorkspaceTurns, listTurns } from "../turns";
-import { ensureWatch, stopWatch } from "../watch";
+import { ensureWatch, notifyWorkspacePathsChanged, stopWatch } from "../watch";
 import {
 	assertNotChatsContainer,
 	assertNotChatWorkspace,
@@ -248,6 +249,7 @@ import {
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	renameWorkspace,
+	resolveWorkspacePath,
 	retryWorkspaceCreation,
 	settleWorkspace,
 	setWorkspaceDiffBase,
@@ -675,6 +677,11 @@ const handlers: WsHandlers = {
 		repositoryProject(params.id);
 		return renameProject(params.id, params.name);
 	},
+	"project.move": (params) => {
+		repositoryProject(params.id);
+		repositoryProject(params.targetId);
+		return moveProject(params.id, params.targetId, params.placement);
+	},
 	"project.setTrust": async (p) => {
 		const project = repositoryProject(p.id);
 		const acknowledged =
@@ -731,6 +738,11 @@ const handlers: WsHandlers = {
 	},
 	"workspace.rename": (p) => {
 		return renameWorkspace(p.id, p.name).workspace;
+	},
+	"workspace.resolvePath": async (p) => {
+		const match = await resolveWorkspacePath(p.path);
+		if (match) provisionInitialTerminal(getWorkspace(match.workspaceId));
+		return match;
 	},
 	"workspace.list": async (p, ctx) => {
 		if (!seesChats(ctx.protocolVersion) && isChatsContainerId(p.projectId)) return [];
@@ -839,8 +851,8 @@ const handlers: WsHandlers = {
 	"chat.inspect": (params) => inspectChat(params.workspaceId),
 	"chat.continue": (params) => startContinuation(params.workspaceId, params.projectId),
 	"chat.continuationStatus": (params) => continuationStatus(params.operationId),
-	"workspace.openIn": (p) => {
-		openEditor(p.editor, getWorkspace(p.id).worktreePath);
+	"workspace.openIn": async (p) => {
+		await openEditor(p.editor, getWorkspace(p.id).worktreePath);
 		return { ok: true } as const;
 	},
 	"workspace.reveal": (params) => {
@@ -921,6 +933,22 @@ const handlers: WsHandlers = {
 			p.path,
 			p.maxBytes === undefined ? {} : { maxBytes: p.maxBytes },
 		);
+	},
+	"fs.copy": (p) => {
+		void ensureWatch(p.destinationWorkspaceId);
+		return withChangeLock(p.destinationWorkspaceId, async () => {
+			const { path, written } = await copyWorktreeEntry(p);
+			notifyWorkspacePathsChanged(p.destinationWorkspaceId, written);
+			return { path };
+		});
+	},
+	"fs.delete": (p) => {
+		void ensureWatch(p.workspaceId);
+		return withChangeLock(p.workspaceId, async () => {
+			const { path, directory } = await deleteWorktreeEntry(p.workspaceId, p.path);
+			notifyWorkspacePathsChanged(p.workspaceId, [path], { subtrees: directory });
+			return { ok: true } as const;
+		});
 	},
 	"spec.graph": (p) => {
 		void ensureWatch(p.workspaceId);
