@@ -236,6 +236,19 @@ jobs:
           EOF
           cat packages/shared/src/version.ts
 
+      - name: Report the Chinese catalog's drift
+        if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
+        run: |
+          set -euo pipefail
+          # Never fails the build: an upstream merge that adds strings must announce them, not
+          # block the release. `--strict` is what a gate would use.
+          report=$(bun scripts/check-translations.ts)
+          printf '%s\n' "$report"
+          echo "### Simplified Chinese catalog" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$report" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Package the stable desktop build
         if: steps.decide.outputs.rebuild == 'true' && steps.merge.outputs.conflict == 'false'
         run: bun run --cwd apps/desktop package:stable

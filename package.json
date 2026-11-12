@@ -90,6 +90,7 @@
 		"check:seams": "bun scripts/check-binary-seams.ts",
 		"check:spec-surface": "bun scripts/check-spec-surface.ts",
 		"check:i18n": "bun test scripts/checkI18n.test.ts scripts/i18nRenderReach.test.ts && bun scripts/check-i18n.ts",
+		"check:translations": "bun test packages/locales/src/missing.test.ts && bun scripts/check-translations.ts",
 		"check:compiler": "bun --filter @thinkrail/web compiler:census:check",
 		"check:pi-packages": "bun scripts/check-pi-packages.ts",
 		"ci:flakes": "bun scripts/ci-flakes.ts",
