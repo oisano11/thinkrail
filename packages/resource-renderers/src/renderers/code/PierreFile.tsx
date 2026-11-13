@@ -152,7 +152,7 @@ function PierreFileSurface({
 		viewState,
 		onViewState,
 	);
-	const { virtualizer, metrics, attach, lineHeight } = usePierreVirtualizer(attachScroller);
+	const { virtualizer, metrics, attach } = usePierreVirtualizer(attachScroller);
 	usePierreFocus(rootRef, virtualizer, [{ review }], placedThreadIds);
 	const revealLine = reveal?.line;
 	const revealTick = reveal?.tick;
@@ -185,7 +185,6 @@ function PierreFileSurface({
 			) : (
 				<VirtualizerContext.Provider value={virtualizer}>
 					<File<FileAnnotationMetadata>
-						key={lineHeight}
 						file={file}
 						options={options}
 						metrics={metrics}
