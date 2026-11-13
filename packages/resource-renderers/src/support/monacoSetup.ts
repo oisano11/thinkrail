@@ -102,12 +102,8 @@ export function fileEditorOptions(
 	bounded: boolean,
 	path: string,
 	font: ResolvedFont,
-	code: { fontSize: number; rowHeight: number },
 ) {
-	// The reader's scaled code metrics arrive as values, not as custom properties read here: React
-	// cannot see a custom property change, so a memoised caller would keep stale options.
-	const fontSize = code.fontSize > 0 ? code.fontSize : font.size || 11;
-	const lineHeight = code.rowHeight > 0 ? code.rowHeight : undefined;
+	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
 	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
 	const options: editor.IStandaloneEditorConstructionOptions = {
 		readOnly: true,
@@ -123,7 +119,7 @@ export function fileEditorOptions(
 		minimap: { enabled: false },
 		scrollBeyondLastLine: false,
 		automaticLayout: true,
-		fontSize,
+		fontSize: font.size || 11,
 		fontFamily: font.family || "monospace",
 		fontWeight: String(font.weight || 400),
 		fontLigatures: font.ligatures,

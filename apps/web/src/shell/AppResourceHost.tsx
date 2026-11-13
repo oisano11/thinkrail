@@ -11,7 +11,7 @@ import {
 	type ResourceReviewSendProps,
 	registerBundledResourceRenderers,
 } from "@thinkrail/resource-renderers";
-import { type ReactNode, useMemo, useSyncExternalStore } from "react";
+import { type ReactNode, useMemo } from "react";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { CODE_LANGUAGES, codeLanguageId } from "../lib/codeLanguages";
@@ -25,12 +25,6 @@ import {
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import {
-	currentFontScale,
-	scaledCodeFontSize,
-	scaledCodeRowHeight,
-	subscribeFontScale,
-} from "../styles/fontScale";
 import { resolveThinkrailEditorTheme, THINKRAIL_PIERRE_THEME } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
 
@@ -112,7 +106,6 @@ export const PALETTE_PREVIEW_HOST: ResourceHost = {
 export function AppResourceHost({ children }: { children: ReactNode }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
-	const fontScale = useSyncExternalStore(subscribeFontScale, currentFontScale, () => 1);
 	const markdownOutlineVisible = useAppStore((state) => state.markdownOutlineVisible);
 	const markdownOutlineSide = useAppStore((state) => state.markdownOutlineSide);
 	const setMarkdownOutlineVisible = useAppStore((state) => state.setMarkdownOutlineVisible);
@@ -121,8 +114,6 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 		() => ({
 			fileLineWidth,
 			fileLineWidthBounded,
-			codeRowHeight: scaledCodeRowHeight(fontScale),
-			codeFontSize: scaledCodeFontSize(fontScale),
 			markdownOutlineVisible,
 			setMarkdownOutlineVisible,
 			markdownOutlineSide,
@@ -130,7 +121,6 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 		[
 			fileLineWidth,
 			fileLineWidthBounded,
-			fontScale,
 			markdownOutlineVisible,
 			setMarkdownOutlineVisible,
 			markdownOutlineSide,

@@ -18,7 +18,6 @@ import { installDeepLinks } from "./shell/deepLink";
 import { initMarkdownOutlinePersistence } from "./shell/markdownOutlinePreference";
 import { Shell } from "./shell/Shell";
 import { DictationLayer } from "./speech";
-import { applyFontScale, readFontScale } from "./styles/fontScale";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -30,7 +29,6 @@ import {
 initializeThemes();
 applyThemePreference(readThemeHint());
 initializeFonts();
-applyFontScale(readFontScale());
 initTransport();
 installClientErrorReporting();
 setErrorBoundaryReporter((error, reportId) =>
