@@ -39,7 +39,13 @@ those tokens; the defaults themselves stay in `typography.json` ([[web-typograph
 
 A default value is **removed**, never restated: a role at its bundled default with no fallbacks clears
 its family token so the generated `var(--tr-font-family-<role>-default)` applies, and the same holds for
-size, weight and ligatures. A chosen stack is the chosen family, then the fallbacks, then the role's
+weight and ligatures. The two code tokens are the exception — `--tr-font-size-code` and
+`--tr-code-row-height` are always written, at their `typography.json` bases (13px, and the 14px
+pre-rounded row) when the reader kept the default size. Their generated default derives from
+`--tr-font-size-s13`, which the reader's interface scale (`styles/interfaceScale.ts`, [[web-typography]])
+overrides; leaving them unset would make code text and the terminal follow an interface setting, so the
+interface scale could move the one surface it promises not to touch.
+ A chosen stack is the chosen family, then the fallbacks, then the role's
 bundled stack; a fallback on the default face keeps the bundled face first, because the bundled stack ends
 in a generic family that would swallow anything after it. A bundled face chosen for the other role is
 referenced by that role's first bundled family.

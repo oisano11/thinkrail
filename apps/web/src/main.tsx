@@ -18,6 +18,7 @@ import { installDeepLinks } from "./shell/deepLink";
 import { initMarkdownOutlinePersistence } from "./shell/markdownOutlinePreference";
 import { Shell } from "./shell/Shell";
 import { DictationLayer } from "./speech";
+import { applyInterfaceScale, readInterfaceScale } from "./styles/interfaceScale";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -28,6 +29,7 @@ import {
 
 initializeThemes();
 applyThemePreference(readThemeHint());
+applyInterfaceScale(readInterfaceScale());
 initializeFonts();
 initTransport();
 installClientErrorReporting();

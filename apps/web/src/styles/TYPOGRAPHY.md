@@ -290,6 +290,25 @@ unresolved (`calc(13px - 2px)`), so it resolves it through an element's computed
 - **Host defaults mirror the JSON.** `DEFAULT_CONFIG`'s `codeFontSize`, `codeLigatures` and
   `fontWeightOffset`, and the contracts' `CODE_FONT_SIZE.editorDelta`, equal these defaults (the runtime
   writes nothing at a default); `typography.test.ts` pins them.
+- **The code tokens are written even at a default.** `--tr-font-size-code` and `--tr-code-row-height`
+  are always set explicitly (13px and the 14px pre-rounded row, read from `typography.json`), not
+  removed, because their generated default derives from `--tr-font-size-s13` — the size the reader's
+  [interface scale](#the-readers-interface-scale) overrides. Leaving them unset would drag code text and
+  the terminal along with an interface setting that exists to make *interface* text larger.
+
+### The reader's interface scale
+
+`styles/interfaceScale.ts` is the second writer of the type tokens, and the only one that also moves
+layout: it multiplies every `--tr-font-size-sN` **and** the sizing roles that exist to hold text
+(`--panel-row-height`, `--panel-header-row-height`, the three `--topbar-*` heights — see
+[`SPACING.md`](SPACING.md#layout-roles)). It writes inline on `documentElement` only while the reader
+wants something other than 100%, and removes every property at 100%, so the generated CSS stays the
+source of truth. It never writes `--tr-font-size-code`, `--tr-font-size-code-dense` or
+`--tr-code-row-height`: code and terminal sizes are their own setting.
+
+This is not a second type system — the values are the JSON's, multiplied — but it is the one runtime
+change that moves layout, which is why `SPACING.md` names it as the exception to "a change to the type
+scale never moves layout": enlarging text inside a row that kept its default height clips it.
 
 ## Mono policy
 

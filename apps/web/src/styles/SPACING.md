@@ -67,6 +67,13 @@ mechanical `lg`→`16` rewrite would collapse a 32rem column to 16px. `spacingUs
 Spacing stays independent of typography, colour and radius: a change to the type scale or a theme never
 moves layout. `tokens.css` (structure) holds no spacing scale; `spacing.json` is its only authored source.
 
+The one exception is the reader's interface scale (`styles/interfaceScale.ts`), which enlarges the type
+scale *and* the roles that exist to hold text (`--panel-row-height`, `--panel-header-row-height`, the
+three `--topbar-*` heights). That is not a layout change an author made — it is the reader saying the
+text is too small, and leaving those rows at their default height would cut the enlarged text off. The
+rhythm roles (`--panel-inset`, `--tree-indent`, `--chat-gutter`) and every icon size stay put, so the
+interface keeps its shape.
+
 ## Layout roles
 
 A value several surfaces must change **together** is a named layout role, not a repeated literal, so a
@@ -80,6 +87,8 @@ mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--p
 | `--panel-header-row-height` | `28px` | `h-` / `w-panel-header-row` | the height of every header strip (tab strips, pane headers, chat toolbar, bottom tool rail) and the width of its full-height square actions |
 | `--panel-header-control-height` | `calc(var(--panel-header-row-height) - var(--space-4))` | `h-panel-header-control` | every control floating inside a header strip, so it keeps clearing the strip’s 1px border whenever the header height changes |
 | `--topbar-row-height` | `40px` | `h-topbar-row` | the top bar and the native window controls that sit in it |
+| `--topbar-caption-height` | `14px` | `h-topbar-caption` | the caption line of a top-bar segment (the small label above its value) |
+| `--topbar-value-height` | `20px` | `h-topbar-value` | the value line of a top-bar segment, its pills and its buttons |
 | `--panel-row-height` | `22px` | `h-` / `min-h-` / `size-panel-row` | every side-pane row (file, change, spec, project, workspace) and the row-height icon buttons inside them |
 | `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Review) |
 | `--tree-indent` | `var(--space-8)` | `pl-tree-indent` | per-depth indentation of the Files, Changes and Specs trees |

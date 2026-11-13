@@ -30,6 +30,16 @@ import {
 	weightResponse,
 } from "@/fonts";
 import { useAppStore } from "@/store";
+import {
+	applyInterfaceScale,
+	DEFAULT_INTERFACE_SCALE,
+	INTERFACE_SCALE_MAX,
+	INTERFACE_SCALE_MIN,
+	INTERFACE_SCALE_STEP,
+	interfaceScalePercent,
+	readInterfaceScale,
+	writeInterfaceScale,
+} from "@/styles/interfaceScale";
 import { getTransport } from "@/transport";
 import { FallbackChips, FontPicker } from "./FontPicker";
 import {
@@ -341,6 +351,88 @@ function CodeSizeRow({
 	);
 }
 
+/**
+ * The interface scale lives in `styles/interfaceScale.ts` — it is a per-reader display preference,
+ * not a workspace setting, so it never travels through the transport.
+ */
+export function InterfaceSizeRow({
+	value,
+	onCommit,
+}: {
+	value: number;
+	onCommit: (next: number) => Promise<boolean>;
+}) {
+	const t = useT();
+	const { draft, invalid, submit, inputProps } = useSettingsDraft({
+		saved: String(value),
+		isValid: (next) =>
+			/^\d+$/.test(next) &&
+			Number(next) >= interfaceScalePercent(INTERFACE_SCALE_MIN) &&
+			Number(next) <= interfaceScalePercent(INTERFACE_SCALE_MAX),
+		commit: (next) => onCommit(Number(next)),
+	});
+	const current = invalid ? value : Number(draft);
+	const step = Math.round(INTERFACE_SCALE_STEP * 100);
+	const errorId = "interface-size-error";
+	return (
+		<SettingsRow
+			label={t("settings.appearance.fonts.interfaceSize")}
+			testId="interface-size"
+			description={
+				<>
+					{t("settings.appearance.fonts.interfaceSizeDescription")}
+					{invalid ? (
+						<span id={errorId} className="block text-feedback-error tr-text-metadata">
+							{t("settings.appearance.fonts.interfaceSizeInvalid", {
+								min: interfaceScalePercent(INTERFACE_SCALE_MIN),
+								max: interfaceScalePercent(INTERFACE_SCALE_MAX),
+							})}
+						</span>
+					) : null}
+				</>
+			}
+			control={
+				<WithReset
+					dirty={value !== interfaceScalePercent(DEFAULT_INTERFACE_SCALE)}
+					label={t("settings.appearance.fonts.resetInterfaceSize")}
+					onReset={() => submit(String(interfaceScalePercent(DEFAULT_INTERFACE_SCALE)))}
+				>
+					<div className="flex items-center gap-4">
+						<IconButton
+							icon={Minus}
+							label={t("settings.appearance.fonts.smaller")}
+							variant="outline"
+							size="l"
+							disabled={current <= interfaceScalePercent(INTERFACE_SCALE_MIN)}
+							onClick={() => submit(String(current - step))}
+						/>
+						<input
+							type="number"
+							min={interfaceScalePercent(INTERFACE_SCALE_MIN)}
+							max={interfaceScalePercent(INTERFACE_SCALE_MAX)}
+							step={step}
+							inputMode="numeric"
+							{...inputProps}
+							aria-label={t("settings.appearance.fonts.interfaceSizeInput")}
+							aria-describedby={invalid ? errorId : undefined}
+							data-testid="interface-size-input"
+							className={cn(SETTINGS_INPUT, "w-64 text-center")}
+						/>
+						<IconButton
+							icon={Plus}
+							label={t("settings.appearance.fonts.larger")}
+							variant="outline"
+							size="l"
+							disabled={current >= interfaceScalePercent(INTERFACE_SCALE_MAX)}
+							onClick={() => submit(String(current + step))}
+						/>
+					</div>
+				</WithReset>
+			}
+		/>
+	);
+}
+
 export function FontsGroup() {
 	const t = useT();
 	const interfaceFont = useAppStore((state) => state.interfaceFont);
@@ -353,6 +445,7 @@ export function FontsGroup() {
 	const installedRequestRef = useRef(0);
 	const [pending, setPending] = useState<ReadonlySet<FontRole>>(new Set());
 	const [advanced, setAdvanced] = useState(false);
+	const [interfaceScale, setInterfaceScale] = useState(readInterfaceScale);
 	const [faces] = useState(bundledFaces);
 	const [shares] = useState(sharesHostFonts);
 	const facesRevision = useSyncExternalStore(subscribeFontFaces, fontFacesRevision);
@@ -539,6 +632,13 @@ export function FontsGroup() {
 				description={t("settings.appearance.fonts.interface.description")}
 			/>
 			{fontRow("interface")}
+			<InterfaceSizeRow
+				value={interfaceScalePercent(interfaceScale)}
+				onCommit={(next) => {
+					setInterfaceScale(applyInterfaceScale(writeInterfaceScale(next / 100)));
+					return Promise.resolve(true);
+				}}
+			/>
 			<WeightRow
 				value={fontWeightOffset}
 				onCommit={(next) => saveSettings({ fontWeightOffset: next }, failure)}

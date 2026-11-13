@@ -8,6 +8,7 @@ import {
 	type UserFontFile,
 	type UserFontFileOk,
 } from "@thinkrail/contracts";
+import typography from "../styles/typography.json";
 import { type BundledFaces, familiesOf, fontStack } from "./stack";
 
 export type FontPreference = FontSettings;
@@ -22,6 +23,35 @@ const CODE_SIZE_TOKEN = "--tr-font-size-code";
 const CODE_ROW_TOKEN = "--tr-code-row-height";
 const WEIGHT_OFFSET_TOKEN = "--tr-font-weight-offset";
 const LIGATURES_TOKEN = "--tr-font-ligatures-code";
+
+/**
+ * The code tokens are always written, even at the default size. `--tr-font-size-code` derives from
+ * `--tr-font-size-s13` in the generated CSS, and the reader's interface scale (`styles/interfaceScale.ts`)
+ * overrides that size — leaving the token unset would drag code text along with the interface. Code
+ * and terminal sizes have their own setting, so they stay put. The bases come from
+ * `styles/typography.json`, the same source the generated CSS is built from.
+ */
+const BASE_CODE_SIZE = typographyNumber(
+	typography.fontSizes as Record<string, number>,
+	typography.codeSize.fontSize,
+);
+const BASE_CODE_ROW_HEIGHT = Math.round(
+	typographyNumber(
+		typography.fontSizes as Record<string, number>,
+		typography.codeRow.fontSize,
+	) *
+		typographyNumber(
+			typography.lineHeights as Record<string, number>,
+			typography.codeRow.lineHeight,
+		),
+);
+
+/** `typography.json` is schema-validated, so a missing base is a build error rather than a silent 0px. */
+function typographyNumber(group: Record<string, number>, key: string): number {
+	const value = group[key];
+	if (typeof value !== "number") throw new Error(`typography.json has no ${key}`);
+	return value;
+}
 
 let bundled: BundledFaces | null = null;
 
@@ -91,8 +121,8 @@ export function applyFontPreference(preference: FontPreference): void {
 		write(root, FAMILY_TOKEN[role], fontStack(choice, role, faces));
 	}
 	const sized = preference.codeFontSize !== DEFAULT_FONT_PREFERENCE.codeFontSize;
-	write(root, CODE_SIZE_TOKEN, sized ? `${preference.codeFontSize}px` : null);
-	write(root, CODE_ROW_TOKEN, sized ? `${denseCodeRowHeight(root)}px` : null);
+	write(root, CODE_SIZE_TOKEN, `${sized ? preference.codeFontSize : BASE_CODE_SIZE}px`);
+	write(root, CODE_ROW_TOKEN, `${sized ? denseCodeRowHeight(root) : BASE_CODE_ROW_HEIGHT}px`);
 	write(
 		root,
 		WEIGHT_OFFSET_TOKEN,
