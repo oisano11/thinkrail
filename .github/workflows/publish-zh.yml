@@ -11,12 +11,12 @@ name: publish-zh
 # counter, taken from the ledger and always incremented. Gluing the serial onto upstream's own
 # prerelease (`0.4.0-nightly.10-zh.1`) does not work: semver compares `10-zh` and `7-zh` as
 # alphanumeric identifiers, so `10-zh` ranks *below* `7-zh` and the feed stalls at single digits.
-# The release body is the ledger (`upstream-sha:` / `version:` / `max-version:`); nothing is ever
-# stamped into the branch, so upstream merges never conflict on version.ts.
+# The release body is the ledger (`upstream-sha:` / `build-sha:` / `version:` / `max-version:`);
+# nothing is ever stamped into the branch, so upstream merges never conflict on version.ts.
 on:
   schedule:
-    # Every six hours. A run whose upstream commit is already published exits before it installs
-    # anything, so the extra slots cost a checkout each and only build when upstream moved.
+    # Every six hours. A run whose build is already published exits before it installs anything, so
+    # the extra slots cost a checkout each and only build when upstream or `zh` moved.
     - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
@@ -120,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           body=$(gh release view "$FEED_RELEASE" --json body --jq '.body' 2>/dev/null || true)
-          published_sha=$(printf '%s' "$body" | sed -n 's/^upstream-sha: //p' | tail -n 1)
+          published_build=$(printf '%s' "$body" | sed -n 's/^build-sha: //p' | tail -n 1)
           published_version=$(printf '%s' "$body" | sed -n 's/^version: //p' | tail -n 1)
           # The highest version ever published, kept in the body because `version:` only names the
           # current build: a reader may still hold a build from an earlier serial, and the feed has
@@ -128,9 +128,20 @@ jobs:
           published_max=$(printf '%s' "$body" | sed -n 's/^max-version: //p' | tail -n 1)
           [ -n "$published_max" ] || published_max=$published_version
 
-          if [ "${FORCE:-false}" != "true" ] && [ -n "$published_sha" ] && [ "$published_sha" = "$SHA" ]; then
+          # What a build *is*: the tip of `zh` once upstream is merged into it. Comparing only the
+          # upstream commit would skip every fork-only change — the branch carries our own commits on
+          # top of upstream, and "upstream did not move" is not "nothing to build". When upstream is
+          # not an ancestor yet, this run creates a fresh merge commit, so it can never be a rebuild.
+          zh=$(git rev-parse origin/zh)
+          if git merge-base --is-ancestor "$SHA" "$zh"; then
+            build_sha=$zh
+          else
+            build_sha=""
+          fi
+
+          if [ "${FORCE:-false}" != "true" ] && [ -n "$build_sha" ] && [ "$build_sha" = "$published_build" ]; then
             echo "rebuild=false" >> "$GITHUB_OUTPUT"
-            echo "upstream $SHA is already published, nothing to do"
+            echo "${build_sha:0:7} is already published, nothing to do"
             exit 0
           fi
 
@@ -192,6 +203,7 @@ jobs:
               git commit -q --amend --no-edit
             fi
           fi
+          echo "build_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "conflict=false" >> "$GITHUB_OUTPUT"
 
       - name: Report a conflict and stop
@@ -305,9 +317,10 @@ jobs:
           MANIFEST: ${{ steps.artifacts.outputs.manifest }}
           ARCHIVE: ${{ steps.artifacts.outputs.archive }}
           DMG: ${{ steps.artifacts.outputs.dmg }}
+          BUILD_SHA: ${{ steps.merge.outputs.build_sha }}
         run: |
           set -euo pipefail
-          notes=$(printf 'Simplified Chinese interface with the full catalog, built from upstream `%s`.\n\nupstream-sha: %s\nversion: %s\nmax-version: %s\n' "$REF" "$SHA" "$VERSION" "$VERSION")
+          notes=$(printf 'Simplified Chinese interface with the full catalog, built from upstream `%s`.\n\nupstream-sha: %s\nbuild-sha: %s\nversion: %s\nmax-version: %s\n' "$REF" "$SHA" "$BUILD_SHA" "$VERSION" "$VERSION")
           if gh release view "$FEED_RELEASE" >/dev/null 2>&1; then
             gh release edit "$FEED_RELEASE" --notes "$notes"
           else
