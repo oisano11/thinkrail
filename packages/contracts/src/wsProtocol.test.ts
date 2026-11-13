@@ -286,9 +286,9 @@ test("voice input is pinned to v107", () => {
 	expect(WS_CHANNELS.speechChanged).toBe("speech.changed");
 });
 
-test("context window ceilings are pinned to v120", () => {
-	expect(CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION).toBe(120);
-	expect(PROTOCOL_VERSION).toBe(120);
+test("context window ceilings are pinned to v121", () => {
+	expect(CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION).toBe(121);
+	expect(PROTOCOL_VERSION).toBe(121);
 	expect(WS_METHODS.modelApplyContextCeilings).toBe("model.applyContextCeilings");
 	expect(WS_METHODS.modelContextSettings).toBe("model.contextSettings");
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");

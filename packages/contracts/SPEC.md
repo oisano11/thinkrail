@@ -197,9 +197,25 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `session_info_changed` / `thinking_level_changed` / host-projected `entry_appended { entryType }`
     members, plus `bash_execution_update` — mirrored
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
-    Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
-    **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
-    mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
+    Every message an event carries (`message_*`, `turn_end` with its `toolResults`, `agent_end.messages`) is
+    typed as **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
+    mirrors — never pi-agent-core's `AgentMessage`.
+    **Image blocks travel as `WireImage`** (#1180, `IMAGE_REFS_PROTOCOL_VERSION` v120). `WireImage` is a union:
+    - `RefImage` (`{type:"image", mimeType, ref, width?, height?}`) is what the host sends in every host→page
+      payload. Its `ref` is a host-relative path under **`IMAGES_ROUTE`** (`/images/`), fetched over HTTP
+      ([[submodule-server-images]]).
+    - pi's inline `ImageContent` is the other member. It covers the page's optimistic echo and a page talking to
+      an older host.
+
+    `WireUserMessage` / `WireToolResultMessage` and `WireCustomMessage.content` carry `WireImage`; with
+    `AssistantMessage` they form **`WireMessage`**, the base of `TranscriptMessage`. A consumer must narrow
+    (`"ref" in image`) before it reads `data`, so a forgotten consumer fails to compile instead of rendering an
+    empty `data:` URL. The union is not a projection guarantee: the host's wire tests prove no `data` leaves it.
+    Opaque tool fields (`result`, `partialResult`, `args`) stay `any`, and page parsing of them stays
+    defensive. Page→host shapes (`session.prompt` / `steer` / `followUp` / `nudge` images) and the
+    composer-restore replies keep inline `ImageContent`.
+    There is no gating, by the user's decision: an older page against this host is unsupported until it
+    reloads. That type is `Message` plus whatever
     `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
     custom roles only in Node builds, and pi-agent-core itself no longer adds them, so the same
     `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
@@ -213,6 +229,19 @@ the palette ranks with — kept here so host-side search can rank with the same 
     casting pi's richer object wholesale, and wire data remains untrusted, so the reducer guards the field
     shapes rather than assuming them;
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
+    - **Two events are full snapshots.** A `message_update` whose `assistantMessageEvent` carries
+      `partial` holds the whole response so far; that includes `text_end`, `thinking_end` and
+      `toolcall_end`. A `tool_execution_update` holds the whole `partialResult` for its
+      `(sessionId, toolCallId)`.
+    - **A backpressured connection may get only the newest unsent snapshot** per assistant message or
+      tool call. That snapshot is still delivered once the backpressure clears, even if the producer
+      emits nothing more. Consumers render these events from the snapshot, never by accumulating the
+      nested deltas, and never by requiring every content-boundary event.
+    - **Ordering.** No other Pi event is conflated. A held snapshot is delivered before any later
+      non-snapshot Pi event, `session.state` or `pi.extensionUi` of the same session.
+    - **Discarding.** Session deletion and connection teardown discard held snapshots.
+    - **What reopens this contract.** A delta-only representation, or a consumer that needs every
+      event, must revisit it.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
@@ -246,7 +275,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
     once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
-    **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
+    **`TranscriptMessage[]`** — the wire `WireMessage` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
@@ -488,8 +517,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
-  **`LINE_WIDTH_COLUMNS`** owns the shared `{ min: 40, max: 240, default: 120 }` integer contract for
-  the independently bounded chat/file visual wrap columns; **`isLineWidth`** is the one validator consumed
+  **`LINE_WIDTH_COLUMNS`** owns the shared 40–240 integer contract for the independently bounded
+  chat/file visual wrap columns, with a per-**`LineWidthKind`** (`"chat" | "file"`) default of 80 / 120 —
+  chat is a reading measure, files keep a code-width column; the wire still carries both values, so a
+  default change needs no protocol bump; **`isLineWidth`** is the one validator consumed
   on both sides of the wire;
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
@@ -775,13 +806,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `defaultEffort ?? "medium"`, clamped with Pi's `clampThinkingLevel` when a model exists) /
   **`model.contextSettings`** / **`model.setContextWindow`** (v76; both return
   **`ModelContextSetting[]`** — every available model's `provider`/`id`/`name`, pi's effective
-  `contextWindow`, the explicit models.json `override` or `null` for pi's default, and at v120
+  `contextWindow`, the explicit models.json `override` or `null` for pi's default, and at v121
   (`CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION`) a **`ceiling`**: the largest window any other interface of the same model declares, with the `api` that
   declares it, or `null` when nothing declares more. A setting whose window — its ceiling when one
   exists, otherwise pi's value — falls below the range's minimum is listed read-only, since
   **`isModelContextWritable`** is what a control must check before offering a change; the ceiling is
   derived from pi's catalog and the registered providers, never from a model-id table. **`model.applyContextCeilings`**
-  (v120) takes no parameters, writes the ceiling onto every writable row that has no override yet, and
+  (v121) takes no parameters, writes the ceiling onto every writable row that has no override yet, and
   returns the same array, so one call fills the whole list in. The mutation takes
   `{target: "available" | {provider,id}, contextWindow: number | null}`: `null` removes the override;
   a number must satisfy **`isModelContextWindow`** within the target's

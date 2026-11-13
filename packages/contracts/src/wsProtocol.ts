@@ -142,8 +142,10 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 120;
-export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 120;
+export const PROTOCOL_VERSION = 121;
+export const IMAGE_REFS_PROTOCOL_VERSION = 120;
+export const IMAGES_ROUTE = "/images/";
+export const CONTEXT_WINDOW_CEILINGS_PROTOCOL_VERSION = 121;
 export const WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION = 119;
 export const FS_MUTATIONS_PROTOCOL_VERSION = 118;
 export const EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION = 115;
