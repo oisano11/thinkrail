@@ -36,10 +36,7 @@ const BASE_CODE_SIZE = typographyNumber(
 	typography.codeSize.fontSize,
 );
 const BASE_CODE_ROW_HEIGHT = Math.round(
-	typographyNumber(
-		typography.fontSizes as Record<string, number>,
-		typography.codeRow.fontSize,
-	) *
+	typographyNumber(typography.fontSizes as Record<string, number>, typography.codeRow.fontSize) *
 		typographyNumber(
 			typography.lineHeights as Record<string, number>,
 			typography.codeRow.lineHeight,
