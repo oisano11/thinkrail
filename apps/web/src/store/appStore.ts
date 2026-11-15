@@ -45,6 +45,7 @@ import type {
 	UserThemesSnapshot,
 	WireModel,
 	Workspace,
+	WorkspaceArtifactsSnapshot,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
@@ -130,6 +131,7 @@ import {
 } from "./mcp";
 import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
+	artifactsWatermark,
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,
 	isChatResourceReadCurrent,
@@ -176,6 +178,12 @@ export interface FileReveal {
 export interface FileClipboard {
 	workspaceId: string;
 	path: string;
+	cut?: true;
+}
+
+export interface ArtifactsPreferences {
+	seen: Record<string, number>;
+	showIgnored: boolean;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -359,6 +367,7 @@ export interface ComposerFocusRequest {
 	workspaceId: string;
 	sessionId: string | null;
 	navTick: number;
+	dismissHistory?: true;
 }
 
 export interface LayoutOpenOptions {
@@ -395,7 +404,7 @@ export type LayoutIntent =
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
-	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId; focus?: false }
 	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
 	| {
 			id: string;
@@ -963,6 +972,14 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 	}
 }
 
+function pasteComposerEdit(rt: SessionRuntime, id: string, text: string): SessionRuntime {
+	const pending = rt.composerEdit;
+	return {
+		...rt,
+		composerEdit: { id, kind: pending?.kind ?? "paste", text: `${pending?.text ?? ""}${text}` },
+	};
+}
+
 function reduceExtUi(
 	rt: SessionRuntime,
 	request: Exclude<ExtUiRequest, { kind: "setTitle" }>,
@@ -970,17 +987,8 @@ function reduceExtUi(
 	switch (request.kind) {
 		case "setEditorText":
 			return { ...rt, composerEdit: { id: request.id, kind: "replace", text: request.text } };
-		case "pasteToEditor": {
-			const pending = rt.composerEdit;
-			return {
-				...rt,
-				composerEdit: {
-					id: request.id,
-					kind: pending?.kind ?? "paste",
-					text: `${pending?.text ?? ""}${request.text}`,
-				},
-			};
-		}
+		case "pasteToEditor":
+			return pasteComposerEdit(rt, request.id, request.text);
 		case "dismiss":
 			if (rt.pendingExtUi?.id === request.id) {
 				const [next, ...rest] = rt.extUiQueue;
@@ -1153,11 +1161,16 @@ interface AppState {
 		navigation: CenterNavigationStamp | null;
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
+	artifactsByWorkspace: Record<string, WorkspaceArtifactsSnapshot>;
+	artifactsTickByWorkspace: Record<string, number>;
+	artifactsSeenByWorkspace: Record<string, number>;
+	artifactsShowIgnored: boolean;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
 		workspaceId: string;
 		commentId: string;
 		surface: ReviewFocusSurface;
+		moveFocus: boolean;
 	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
@@ -1173,6 +1186,7 @@ interface AppState {
 	notificationPromptOpen: boolean;
 	searchOpen: boolean;
 	searchSession: number;
+	shortcutsOpen: boolean;
 	doubleShiftSearch: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
@@ -1265,7 +1279,11 @@ interface AppState {
 	) => void;
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
-	requestComposerFocus: (workspaceId: string, sessionId?: string) => void;
+	requestComposerFocus: (
+		workspaceId: string,
+		sessionId?: string,
+		options?: { dismissHistory?: boolean },
+	) => void;
 	clearComposerFocusRequest: () => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
@@ -1334,7 +1352,7 @@ interface AppState {
 	consumeChangesTabReveal: (
 		workspaceId: string,
 		id: string,
-		target: { path: string; commentId?: string } | null,
+		target: { path: string; commentId?: string; moveFocus?: boolean } | null,
 	) => void;
 	setChangesTabSectionRenderer: (
 		workspaceId: string,
@@ -1521,6 +1539,7 @@ interface AppState {
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
 	consumeComposerEdit: (sessionId: string, editId: string) => void;
+	pasteIntoComposer: (sessionId: string, text: string) => void;
 	updateChatPromptImages: (
 		sessionId: string,
 		update: (current: PromptImagesState) => PromptImagesState,
@@ -1554,6 +1573,8 @@ interface AppState {
 	closeNotificationPrompt: () => void;
 	openSearch: () => void;
 	closeSearch: () => void;
+	openShortcuts: () => void;
+	closeShortcuts: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setMarkdownOutlineVisible: (visible: boolean) => void;
@@ -1570,6 +1591,11 @@ interface AppState {
 	requestSpecView: (workspaceId: string, path: string, line?: number) => void;
 	clearSpecRequest: () => void;
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
+	setWorkspaceArtifacts: (workspaceId: string, snapshot: WorkspaceArtifactsSnapshot) => void;
+	noteArtifactsChanged: (workspaceId: string) => void;
+	markArtifactsSeen: (workspaceId: string, watermark: number) => void;
+	setArtifactsShowIgnored: (show: boolean) => void;
+	hydrateArtifactsPreferences: (preferences: ArtifactsPreferences) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
 	clearReviewFocus: (commentId?: string) => void;
@@ -2525,6 +2551,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
+	artifactsByWorkspace: {},
+	artifactsTickByWorkspace: {},
+	artifactsSeenByWorkspace: {},
+	artifactsShowIgnored: true,
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
@@ -2550,6 +2580,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	notificationPromptOpen: false,
 	searchOpen: false,
 	searchSession: 0,
+	shortcutsOpen: false,
 	doubleShiftSearch: true,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
@@ -2909,6 +2940,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+				artifactsByWorkspace: omitKey(state.artifactsByWorkspace, workspaceId),
+				artifactsTickByWorkspace: omitKey(state.artifactsTickByWorkspace, workspaceId),
+				artifactsSeenByWorkspace: omitKey(state.artifactsSeenByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				fileClipboard:
@@ -3021,12 +3055,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
-	requestComposerFocus: (workspaceId, sessionId) =>
+	requestComposerFocus: (workspaceId, sessionId, options) =>
 		set((state) => ({
 			composerFocusRequest: {
 				workspaceId,
 				sessionId: sessionId ?? null,
 				navTick: selectWorkspaceNavTick(state, workspaceId),
+				...(options?.dismissHistory ? { dismissHistory: true as const } : {}),
 			},
 		})),
 	clearComposerFocusRequest: () =>
@@ -3425,6 +3460,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							workspaceId,
 							commentId: target.commentId,
 							surface: { kind: "diff", scope },
+							moveFocus: target.moveFocus === true,
 						},
 					}
 				: patched;
@@ -4680,6 +4716,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				rt.composerEdit?.id === editId ? { ...rt, composerEdit: null } : rt,
 			),
 		),
+	pasteIntoComposer: (sessionId, text) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => pasteComposerEdit(rt, randomId("composer-paste"), text)),
+		),
 	updateChatPromptImages: (sessionId, update) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4721,8 +4761,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
-			if (request.kind === "setTitle")
-				return renameChat(s, request.sessionId, request.title) ?? bufferExtUiOrphan(s, request);
+			if (request.kind === "setTitle") {
+				const title = typeof request.title === "string" ? request.title : "";
+				return renameChat(s, request.sessionId, title) ?? bufferExtUiOrphan(s, request);
+			}
 			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
@@ -4792,6 +4834,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
 	openSearch: () => set((state) => ({ searchOpen: true, searchSession: state.searchSession + 1 })),
 	closeSearch: () => set((state) => (state.searchOpen ? { searchOpen: false } : state)),
+	openShortcuts: () => set((state) => (state.shortcutsOpen ? state : { shortcutsOpen: true })),
+	closeShortcuts: () => set((state) => (state.shortcutsOpen ? { shortcutsOpen: false } : state)),
 	setDoubleShiftSearch: (doubleShiftSearch) =>
 		set((state) => (state.doubleShiftSearch === doubleShiftSearch ? state : { doubleShiftSearch })),
 	showSurveyInvitation: () =>
@@ -4930,11 +4974,53 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
 		),
+	setWorkspaceArtifacts: (workspaceId, snapshot) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						artifactsByWorkspace: { ...s.artifactsByWorkspace, [workspaceId]: snapshot },
+						...(s.artifactsSeenByWorkspace[workspaceId] === undefined
+							? {
+									artifactsSeenByWorkspace: {
+										...s.artifactsSeenByWorkspace,
+										[workspaceId]: artifactsWatermark(snapshot, true),
+									},
+								}
+							: {}),
+					},
+		),
+	noteArtifactsChanged: (workspaceId) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						artifactsTickByWorkspace: {
+							...s.artifactsTickByWorkspace,
+							[workspaceId]: (s.artifactsTickByWorkspace[workspaceId] ?? 0) + 1,
+						},
+					},
+		),
+	markArtifactsSeen: (workspaceId, watermark) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId] ||
+			watermark <= (s.artifactsSeenByWorkspace[workspaceId] ?? 0)
+				? {}
+				: {
+						artifactsSeenByWorkspace: { ...s.artifactsSeenByWorkspace, [workspaceId]: watermark },
+					},
+		),
+	setArtifactsShowIgnored: (artifactsShowIgnored) => set({ artifactsShowIgnored }),
+	hydrateArtifactsPreferences: ({ seen, showIgnored }) =>
+		set((s) => ({
+			artifactsSeenByWorkspace: { ...seen, ...s.artifactsSeenByWorkspace },
+			artifactsShowIgnored: showIgnored,
+		})),
 	requestReviewFocus: (workspaceId, commentId, surface) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
 				? {}
-				: { reviewFocusRequest: { workspaceId, commentId, surface } },
+				: { reviewFocusRequest: { workspaceId, commentId, surface, moveFocus: true } },
 		),
 	clearReviewFocus: (commentId) =>
 		set((state) =>
