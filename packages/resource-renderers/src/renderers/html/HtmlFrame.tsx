@@ -1,15 +1,28 @@
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { type CSSProperties, type SyntheticEvent, useEffect, useRef, useState } from "react";
+import {
+	type CSSProperties,
+	type SyntheticEvent,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
+import type { FrameFocus } from "../../registry";
 import { useElementSize } from "../../support/useElementSize";
-import { HTML_INTERACTIVE_CSP } from "./htmlDocument";
-import { messageScrollEndpoint, type ScrollLink, windowScrollEndpoint } from "./scrollLink";
+import { HTML_INTERACTIVE_FRAME_CSP } from "./htmlDocument";
+import {
+	frameLifecycleMessage,
+	messageScrollEndpoint,
+	type ScrollLink,
+	windowScrollEndpoint,
+} from "./scrollLink";
 import { type HtmlViewport, htmlFrameGeometry } from "./viewport";
 
 const NO_BOX = { width: 0, height: 0 };
 
-const INTERACTIVE_FRAME = { sandbox: "allow-scripts", csp: HTML_INTERACTIVE_CSP };
+const INTERACTIVE_FRAME = { sandbox: "allow-scripts", csp: HTML_INTERACTIVE_FRAME_CSP };
 
 function useLinkAttachment(scrollLink: ScrollLink | undefined, interactive: boolean) {
 	const detachRef = useRef<(() => void) | null>(null);
@@ -31,21 +44,44 @@ function useLinkAttachment(scrollLink: ScrollLink | undefined, interactive: bool
 	};
 }
 
+const LOADED_GRACE_MS = 1000;
+
 function InteractiveIframe({
 	title,
 	document,
+	token,
 	className,
 	scrollLink,
+	tabIndex,
 	onLeft,
 }: {
 	title: string;
 	document: string;
+	token: string;
 	className: string;
 	scrollLink: ScrollLink | undefined;
+	tabIndex: number | undefined;
 	onLeft: () => void;
 }) {
 	const loads = useRef(0);
+	const loaded = useRef(false);
+	const grace = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const frameRef = useRef<HTMLIFrameElement>(null);
 	const attach = useLinkAttachment(scrollLink, true);
+	useLayoutEffect(() => {
+		const onMessage = (event: MessageEvent) => {
+			const view = frameRef.current?.contentWindow;
+			if (!view || event.source !== view) return;
+			const lifecycle = frameLifecycleMessage(event.data, token);
+			if (lifecycle === "left") onLeft();
+			else if (lifecycle === "loaded") loaded.current = true;
+		};
+		window.addEventListener("message", onMessage);
+		return () => {
+			window.removeEventListener("message", onMessage);
+			if (grace.current) clearTimeout(grace.current);
+		};
+	}, [onLeft, token]);
 	const onLoad = (event: SyntheticEvent<HTMLIFrameElement>) => {
 		loads.current += 1;
 		if (loads.current > 1) {
@@ -53,12 +89,17 @@ function InteractiveIframe({
 			return;
 		}
 		attach(event.currentTarget);
+		grace.current = setTimeout(() => {
+			if (!loaded.current) onLeft();
+		}, LOADED_GRACE_MS);
 	};
 	return (
 		<iframe
+			ref={frameRef}
 			title={title}
 			{...INTERACTIVE_FRAME}
 			srcDoc={document}
+			tabIndex={tabIndex}
 			onLoad={onLoad}
 			data-interactive=""
 			className={className}
@@ -71,11 +112,13 @@ function StaticIframe({
 	document,
 	className,
 	scrollLink,
+	tabIndex,
 }: {
 	title: string;
 	document: string;
 	className: string;
 	scrollLink: ScrollLink | undefined;
+	tabIndex: number | undefined;
 }) {
 	const attach = useLinkAttachment(scrollLink, false);
 	return (
@@ -83,6 +126,7 @@ function StaticIframe({
 			title={title}
 			sandbox={scrollLink ? "allow-same-origin" : ""}
 			srcDoc={document}
+			tabIndex={tabIndex}
 			onLoad={scrollLink ? (event) => attach(event.currentTarget) : undefined}
 			className={className}
 		/>
@@ -117,16 +161,19 @@ export function HtmlFrame({
 	viewport = "responsive",
 	scrollLink,
 	compact = false,
-	interactive = false,
+	interactiveToken,
+	frameFocus = "auto",
 }: {
 	title: string;
 	document: string;
 	viewport?: HtmlViewport;
 	scrollLink?: ScrollLink | undefined;
 	compact?: boolean;
-	interactive?: boolean;
+	interactiveToken?: string | undefined;
+	frameFocus?: FrameFocus | undefined;
 }) {
 	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
+	const frameTabIndex = frameFocus === "manual" ? -1 : undefined;
 	const [run, setRun] = useState({ document, generation: 0, left: false });
 	if (run.document !== document) setRun({ document, generation: run.generation + 1, left: false });
 	const box = size ?? NO_BOX;
@@ -153,12 +200,13 @@ export function HtmlFrame({
 			)}
 			style={fitted ? vars : undefined}
 		>
-			{!interactive ? (
+			{interactiveToken === undefined ? (
 				<StaticIframe
 					title={title}
 					document={document}
 					className={frameClass}
 					scrollLink={scrollLink}
+					tabIndex={frameTabIndex}
 				/>
 			) : run.left ? (
 				<LeftPageNotice
@@ -169,9 +217,11 @@ export function HtmlFrame({
 					key={run.generation}
 					title={title}
 					document={document}
+					token={interactiveToken}
 					className={frameClass}
 					scrollLink={scrollLink}
-					onLeft={() => setRun({ ...run, left: true })}
+					tabIndex={frameTabIndex}
+					onLeft={() => setRun((current) => ({ ...current, left: true }))}
 				/>
 			)}
 		</div>

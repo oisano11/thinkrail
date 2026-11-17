@@ -9,19 +9,25 @@ import { sideCaption } from "../VisualDiff";
 import { htmlRenderer, interactiveHtmlRenderer } from ".";
 import { HtmlFrame } from "./HtmlFrame";
 import {
-	HTML_INTERACTIVE_CSP,
+	HTML_INTERACTIVE_FRAME_CSP,
 	HTML_PREVIEW_CSP,
+	interactiveDocumentPolicy,
+	interactiveToken,
 	prepareHtmlPreviewDocument,
 	prepareInteractiveHtmlDocument,
 	SCROLL_BRIDGE_SOURCE,
+	WEBRTC_GLOBALS,
+	WEBRTC_NEUTER,
 } from "./htmlDocument";
 import { isInteractiveHtmlPath } from "./interactive";
 import {
 	createScrollLink,
+	frameLifecycleMessage,
 	messageScrollEndpoint,
 	type ScrollLinkClock,
 	windowScrollEndpoint,
 } from "./scrollLink";
+import { cspHash } from "./sha256";
 import { HtmlPreviewNotice } from "./ViewportSwitch";
 
 interface FakeAttribute {
@@ -46,6 +52,10 @@ class FakeElement {
 		this.text = text;
 		for (const [name, value] of Object.entries(attributes)) this.values.set(name, value);
 		for (const child of children) this.append(child);
+	}
+
+	get textContent(): string {
+		return `${this.text}${this.children.map((child) => child.textContent).join("")}`;
 	}
 
 	set textContent(value: string) {
@@ -428,6 +438,7 @@ function interactiveDocument(): FakeDocument {
 	const head = new FakeElement("head", {}, "", [
 		new FakeElement("meta", { "http-equiv": "refresh", content: "0;url=https://attacker.invalid" }),
 		new FakeElement("base", { href: "https://attacker.invalid/" }),
+		new FakeElement("link", { rel: "preconnect", href: "https://attacker.invalid" }),
 		new FakeElement("style", {}, "button { color: red }"),
 	]);
 	const body = new FakeElement("body", {}, "", [
@@ -441,26 +452,81 @@ function interactiveDocument(): FakeDocument {
 }
 
 test("an interactive mockup keeps its scripts and controls under a no-network policy", () => {
-	const document = prepareInteractiveHtmlDocument(interactiveDocument() as unknown as Document);
+	const document = prepareInteractiveHtmlDocument(
+		interactiveDocument() as unknown as Document,
+		"frame-token-1",
+	);
 	expect(document.match(/Content-Security-Policy/g)).toHaveLength(1);
-	expect(document).toContain(`content="${HTML_INTERACTIVE_CSP}"`);
+	const policy = /http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(document)?.[1] ?? "";
+	const scriptSources = /script-src ([^;]*);/.exec(policy)?.[1]?.split(" ") ?? [];
+	expect(scriptSources).not.toContain("'unsafe-inline'");
+	expect(scriptSources).toContain("'unsafe-hashes'");
+	expect(scriptSources).toContain(cspHash(`${WEBRTC_NEUTER}function toggle() {}`));
+	expect(scriptSources).toContain(cspHash(`${WEBRTC_NEUTER}toggle()`));
+	expect(scriptSources.filter((source) => source.startsWith("'sha256-"))).toHaveLength(3);
+	expect(policy).toBe(interactiveDocumentPolicy(scriptSources.slice(0, -1)));
 	expect(document.indexOf("Content-Security-Policy")).toBeLessThan(document.indexOf("<script>"));
 	expect(document).toContain(SCROLL_BRIDGE_SOURCE);
-	expect(document).toContain('<button onclick="toggle()">Toggle</button>');
+	expect(document).toContain('http-equiv="x-dns-prefetch-control" content="off"');
+	const bridge = document.slice(document.indexOf("<script>"), document.indexOf("</script>"));
+	for (const name of WEBRTC_GLOBALS) expect(bridge).toContain(name);
+	expect(bridge.indexOf("RTCPeerConnection")).toBeLessThan(bridge.indexOf("postMessage"));
+	expect(bridge).toContain("pagehide");
+	expect(bridge).toContain("frame-token-1");
+	expect(bridge).toContain("document.currentScript?.remove()");
 	expect(document).toContain('<input type="checkbox">');
-	expect(document).toContain("<script>function toggle() {}</script>");
+	const neuter = WEBRTC_NEUTER.replaceAll('"', "&quot;");
+	expect(document).toContain(`<button onclick="${neuter}toggle()">Toggle</button>`);
+	expect(document).toContain(`<script>${neuter}function toggle() {}</script>`);
 	expect(document).toContain('<a href="#settings">in page</a>');
 	expect(document).toContain(
 		'<a data-href="https://attacker.invalid/path" title="https://attacker.invalid/path">external</a>',
 	);
-	for (const fragment of ['http-equiv="refresh"', "<base"])
+	for (const fragment of ['http-equiv="refresh"', "<base", "<link"])
 		expect(document).not.toContain(fragment);
 });
 
-test("the interactive policy allows inline script and no network at all", () => {
-	expect(HTML_INTERACTIVE_CSP).toBe(
+test("the interactive policies allow only hashed inline script and no network at all", () => {
+	expect(interactiveDocumentPolicy(["'sha256-a'", "'sha256-b'", "'sha256-a'"])).toBe(
+		"default-src 'none'; script-src 'sha256-a' 'sha256-b' 'unsafe-hashes'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'",
+	);
+	expect(HTML_INTERACTIVE_FRAME_CSP).toBe(
 		"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'",
 	);
+});
+
+test("only scripts that run as JavaScript are prefixed and hashed; others keep their text", () => {
+	const head = new FakeElement("head");
+	const body = new FakeElement("body", {}, "", [
+		new FakeElement("script", { type: "module" }, "go()"),
+		new FakeElement("script", { type: "text/javascript; charset=utf-8" }, "run()"),
+		new FakeElement("script", { type: "application/json" }, '{"a":1}'),
+		new FakeElement("script", { type: "text/template" }, "<b>{{x}}</b>"),
+		new FakeElement("script", { src: "app.js" }, ""),
+	]);
+	const document = prepareInteractiveHtmlDocument(
+		new FakeDocument(head, body) as unknown as Document,
+		"t",
+	);
+	const neuter = WEBRTC_NEUTER.replaceAll('"', "&quot;");
+	expect(document).toContain(`<script type="module">${neuter}go()</script>`);
+	expect(document).toContain(`${neuter}run()`);
+	expect(document).toContain(`<script type="application/json">{&quot;a&quot;:1}</script>`);
+	expect(document).not.toContain(`${neuter}&lt;b&gt;`);
+	expect(document).toContain('<script src="app.js"></script>');
+});
+
+test("a frame token comes from getRandomValues, so it works outside a secure context", () => {
+	const descriptor = Object.getOwnPropertyDescriptor(crypto, "randomUUID");
+	Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+	try {
+		const token = interactiveToken();
+		expect(token).toMatch(/^[0-9a-f]{32}$/);
+		expect(interactiveToken()).not.toBe(token);
+	} finally {
+		if (descriptor) Object.defineProperty(crypto, "randomUUID", descriptor);
+		else delete (crypto as { randomUUID?: unknown }).randomUUID;
+	}
 });
 
 test("an interactive frame runs scripts only without same-origin, paired or not, and carries the policy", () => {
@@ -469,7 +535,7 @@ test("an interactive frame runs scripts only without same-origin, paired or not,
 			createElement(HtmlFrame, {
 				title: "Mockup",
 				document: PREVIEW,
-				interactive: true,
+				interactiveToken: "frame-token-1",
 				...(scrollLink ? { scrollLink } : {}),
 			}),
 		);
@@ -480,7 +546,7 @@ test("an interactive frame runs scripts only without same-origin, paired or not,
 		expect([...openingTag.matchAll(/\ssandbox="([^"]*)"/g)].map((match) => match[1])).toEqual([
 			"allow-scripts",
 		]);
-		expect(openingTag).toContain(`csp="${HTML_INTERACTIVE_CSP.replaceAll("'", "&#x27;")}"`);
+		expect(openingTag).toContain(`csp="${HTML_INTERACTIVE_FRAME_CSP.replaceAll("'", "&#x27;")}"`);
 	}
 });
 
@@ -572,4 +638,36 @@ test("a scripted frame syncs through its bridge, and its clamped answer is not t
 
 	detach();
 	expect(host.listening).toBe(0);
+});
+
+test("only the frame bridge's own lifecycle messages, with its document's token, count", () => {
+	const message = (kind: string, token = "t1", source = SCROLL_BRIDGE_SOURCE) => ({
+		source,
+		kind,
+		token,
+		top: 0,
+		left: 0,
+	});
+	expect(frameLifecycleMessage(message("loaded"), "t1")).toBe("loaded");
+	expect(frameLifecycleMessage(message("left"), "t1")).toBe("left");
+	expect(frameLifecycleMessage(message("loaded", "forged"), "t1")).toBeNull();
+	expect(frameLifecycleMessage({ source: SCROLL_BRIDGE_SOURCE, kind: "loaded" }, "t1")).toBeNull();
+	expect(frameLifecycleMessage(message("scroll"), "t1")).toBeNull();
+	expect(frameLifecycleMessage(message("left", "t1", "other"), "t1")).toBeNull();
+	expect(frameLifecycleMessage("left", "t1")).toBeNull();
+	expect(frameLifecycleMessage(null, "t1")).toBeNull();
+});
+
+test("the policy hash matches the platform's SHA-256 for any text", async () => {
+	const { createHash } = await import("node:crypto");
+	for (const text of [
+		"",
+		"abc",
+		"a".repeat(55),
+		"a".repeat(64),
+		"привет 🎉\n<script>",
+		WEBRTC_NEUTER,
+	]) {
+		expect(cspHash(text)).toBe(`'sha256-${createHash("sha256").update(text).digest("base64")}'`);
+	}
 });

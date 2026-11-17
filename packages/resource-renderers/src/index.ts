@@ -8,6 +8,7 @@ export {
 	ResourceHostProvider,
 	type ResourceMarkdown,
 	type ResourceMarkdownProps,
+	type ResourceOpenInBrowserProps,
 	type ResourcePreferences,
 	ResourcePreferencesProvider,
 	type ResourceReviewSendProps,
@@ -24,6 +25,7 @@ export {
 	describeResource,
 	diffRendererCapabilities,
 	diffResourceMeta,
+	type FrameFocus,
 	type HunkActions,
 	type HunkTriage,
 	isPlaceable,
@@ -57,6 +59,7 @@ export {
 	registerBundledResourceRenderers,
 } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
+export { REVIEW_SURFACE_COMMANDS, REVIEW_SURFACE_SCOPE } from "./support/cursorKeys";
 export {
 	FramedResourcePreview,
 	type FramedResourcePreviewProps,
